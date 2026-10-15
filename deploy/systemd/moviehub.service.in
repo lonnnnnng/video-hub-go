@@ -1,0 +1,23 @@
+[Unit]
+Description=Movie Hub Go 片库服务
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+WorkingDirectory=@INSTALL_DIR@
+EnvironmentFile=-@INSTALL_DIR@/.env
+ExecStart=@INSTALL_DIR@/bin/moviehub --listen @LISTEN@ --data-dir @DATA_DIR@ --media-dir @MEDIA_DIR@
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=45s
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=@DATA_DIR@ @MEDIA_DIR@
+
+[Install]
+WantedBy=multi-user.target

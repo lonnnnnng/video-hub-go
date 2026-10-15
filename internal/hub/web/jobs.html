@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#20343b"><title>下载队列 · 片库</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body data-page="jobs">
+  <aside class="sidebar"><a class="brand" href="/" aria-label="片库首页"><span class="brand-mark" aria-hidden="true">▣</span><span>片库<small>Movie Hub</small></span></a><nav aria-label="主导航"><a href="/"><span aria-hidden="true">⌂</span>首页</a><a href="/follows.html"><span aria-hidden="true">◷</span>我的追更</a><a href="/jobs.html" class="selected" aria-current="page"><span aria-hidden="true">↓</span>下载队列 <span id="queueCount" class="nav-count"></span></a><a href="/sources.html"><span aria-hidden="true">◈</span>资源站</a><a href="/settings.html"><span aria-hidden="true">⚙</span>服务设置</a></nav><div class="sidebar-bottom"><p>让喜欢的剧集<br>有一个自己的片库。</p><button id="access" type="button">访问令牌</button></div></aside>
+  <main class="workspace"><p id="notice" class="notice" role="status" hidden></p><section class="page"><div class="section-head"><div><h2>全部任务</h2><p>下载完成后会整理媒体文件，并按设置通知 Emby。</p></div><label class="inline-field">筛选<select id="jobFilter"><option value="">全部任务</option><option value="active">进行中</option><option value="completed">已入库</option><option value="failed">失败</option><option value="paused">暂停</option></select></label></div><p class="info">暂停后恢复会重新下载该集。取消任务不会删除已有文件。</p><div id="jobList" class="stack-list"></div></section></main>
+  <dialog id="accessDialog" class="access-dialog"><h2>访问令牌</h2><p>远程访问时请输入服务启动时配置的令牌。</p><form id="accessForm"><label>令牌<input id="token" type="password" autocomplete="off"></label><div class="actions"><button id="closeAccess" type="button">取消</button><button class="primary" type="submit">连接服务</button></div></form></dialog>
+</body>
+</html>

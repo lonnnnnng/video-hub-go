@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#20343b">
+  <title>首页 · 片库</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body data-page="search">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="片库首页"><span class="brand-mark" aria-hidden="true">▣</span><span>片库<small>Movie Hub</small></span></a>
+    <nav aria-label="主导航">
+      <a href="/" class="selected" aria-current="page"><span aria-hidden="true">⌂</span>首页</a>
+      <a href="/follows.html"><span aria-hidden="true">◷</span>我的追更</a>
+      <a href="/jobs.html"><span aria-hidden="true">↓</span>下载队列 <span id="queueCount" class="nav-count"></span></a>
+      <a href="/sources.html"><span aria-hidden="true">◈</span>资源站</a>
+      <a href="/settings.html"><span aria-hidden="true">⚙</span>服务设置</a>
+    </nav>
+    <div class="sidebar-bottom"><p>让喜欢的剧集<br>有一个自己的片库。</p><button id="access" type="button">访问令牌</button></div>
+  </aside>
+  <main class="workspace">
+    <p id="notice" class="notice" role="status" hidden></p>
+    <section class="page" aria-label="影片发现">
+      <div class="section-head home-heading"><div><h2 id="resultsTitle">默认站源片库</h2><p id="searchSummary">正在读取首页内容…</p></div><div class="home-actions"><button id="goHome" type="button" hidden>返回首页</button><button id="reloadHome" type="button">刷新首页</button></div></div>
+      <form id="searchForm" class="searchbar"><label class="sr-only" for="keyword">剧集名称</label><input id="keyword" placeholder="搜索剧名" maxlength="100" required><label class="sr-only" for="searchSource">搜索站源</label><select id="searchSource"><option value="">全部已启用资源站</option></select><button class="primary" id="searchButton" type="submit">搜索</button></form>
+      <div id="homeCategories" class="home-categories" aria-label="影片分类"></div>
+      <p id="searchErrors" role="status"></p>
+      <div id="results" class="posters" aria-live="polite"><div class="empty">正在加载默认站源…</div></div>
+      <div id="pagination" class="pagination" hidden><button id="previousPage" type="button">上一页</button><span id="pageNumber"></span><button id="nextPage" type="button">下一页</button></div>
+    </section>
+  </main>
+  <dialog id="detailDialog" class="detail-dialog"><div class="dialog-top"><h2 id="detailTitle">剧集详情</h2><button id="closeDetail" type="button" aria-label="关闭详情">✕</button></div><p id="detailMeta" class="detail-meta"></p><p id="detailPlot"></p><div class="detail-options"><label>播放线路<select id="lineSelect"></select></label><label>季号<input id="season" type="number" min="1" max="999" value="1"></label><button id="selectAll" type="button">全选 / 清空</button></div><p id="episodeHint" class="field-hint"></p><div id="episodes" class="episodes"></div><div class="detail-footer"><div class="detail-checks"><label class="check"><input id="autoDownload" type="checkbox" checked>追更新集自动下载</label><label class="check"><input id="backfill" type="checkbox">追更时补齐已有集</label></div><div class="actions"><button id="addFollow" type="button">加入追更</button><button id="queueEpisodes" type="button" class="primary">下载所选分集</button></div></div></dialog>
+  <dialog id="accessDialog" class="access-dialog"><h2>访问令牌</h2><p>远程访问时请输入服务启动时配置的令牌。</p><form id="accessForm"><label>令牌<input id="token" type="password" autocomplete="off"></label><div class="actions"><button id="closeAccess" type="button">取消</button><button class="primary" type="submit">连接服务</button></div></form></dialog>
+</body>
+</html>

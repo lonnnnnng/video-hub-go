@@ -1,0 +1,370 @@
+package hub
+
+import (
+	"crypto/subtle"
+	"embed"
+	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+)
+
+//go:embed web/*
+var webFiles embed.FS
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+type apiResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *apiResponseWriter) WriteHeader(code int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *apiResponseWriter) Write(data []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
+func decode(w http.ResponseWriter, r *http.Request, v any) error {
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		return errors.New("请使用 application/json")
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if d.Decode(v) != nil {
+		return errors.New("请求 JSON 无效或字段不受支持")
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return errors.New("请求必须只有一份 JSON")
+	}
+	return nil
+}
+func redact(st State) State {
+	st.Settings.EmbyKey = ""
+	for i := range st.Sources {
+		st.Sources[i].Headers = nil
+	}
+	for i := range st.Jobs {
+		st.Jobs[i].Episode.URL = ""
+	}
+	for i := range st.Follows {
+		for k := range st.Follows[i].Video.Lines {
+			for j := range st.Follows[i].Video.Lines[k].Episodes {
+				st.Follows[i].Video.Lines[k].Episodes[j].URL = ""
+			}
+		}
+	}
+	return st
+}
+func validSettings(c *Settings) error {
+	if c.Workers < 1 || c.Workers > 6 || c.Threads < 1 || c.Threads > 32 || c.MaxAttempts < 1 || c.MaxAttempts > 10 || c.CheckMinutes < 1 || c.CheckMinutes > 1440 {
+		return errors.New("并发 1–6，分片线程 1–32，重试次数 1–10，追更间隔 1–1440 分钟")
+	}
+	if strings.TrimSpace(c.MediaDir) == "" || c.FFmpeg == "" || c.FFprobe == "" {
+		return errors.New("请填写媒体目录、FFmpeg 和 FFprobe 路径")
+	}
+	abs, e := filepath.Abs(c.MediaDir)
+	if e != nil {
+		return errors.New("媒体目录无效")
+	}
+	c.MediaDir = abs
+	c.SourceURL = SourceListURL
+	if c.EmbyURL != "" {
+		c.EmbyURL, e = embyServerURL(c.EmbyURL)
+		if e != nil {
+			return e
+		}
+	}
+	if len(c.EmbyKey) > 2048 || strings.ContainsAny(c.EmbyKey, "\x00\r\n") {
+		return errors.New("Emby API Key 格式无效")
+	}
+	if c.EmbyEnabled && (c.EmbyURL == "" || c.EmbyKey == "") {
+		return errors.New("启用 Emby 需要服务器地址及 API Key")
+	}
+	return nil
+}
+func (s *Service) Handler(token string) http.Handler {
+	mux := http.NewServeMux()
+	files, _ := fs.Sub(webFiles, "web")
+	mux.Handle("/", http.FileServer(http.FS(files)))
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	api := func(pattern string, handler func(http.ResponseWriter, *http.Request) error) {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			tracked := &apiResponseWriter{ResponseWriter: w}
+			started := time.Now()
+			if err := handler(tracked, r); err != nil {
+				writeJSON(tracked, 400, map[string]string{"error": err.Error()})
+			}
+			// long: 请求日志只记路由模板，搜索词、播放 URL、令牌和请求体都不能写入日志。
+			if pattern != "GET /api/state" {
+				slog.Info("API 请求完成", "method", r.Method, "route", pattern, "status", tracked.status, "duration_ms", time.Since(started).Milliseconds())
+			}
+		})
+	}
+	api("GET /api/state", func(w http.ResponseWriter, r *http.Request) error {
+		st := s.Store.Snapshot()
+		tools := map[string]bool{}
+		for name, bin := range map[string]string{"ffmpeg": st.Settings.FFmpeg, "ffprobe": st.Settings.FFprobe} {
+			_, err := exec.LookPath(bin)
+			tools[name] = err == nil
+		}
+		headers := map[string]bool{}
+		for _, src := range st.Sources {
+			headers[src.ID] = len(src.Headers) > 0
+		}
+		writeJSON(w, 200, map[string]any{"state": redact(st), "tools": tools, "embyKeySet": st.Settings.EmbyKey != "", "sourceHeadersSet": headers})
+		return nil
+	})
+	api("POST /api/settings", func(w http.ResponseWriter, r *http.Request) error {
+		var input struct {
+			Settings     Settings `json:"settings"`
+			ClearEmbyKey bool     `json:"clearEmbyKey"`
+		}
+		if e := decode(w, r, &input); e != nil {
+			return e
+		}
+		embyChanged, embyEnabled := false, false
+		e := s.Store.Update(func(st *State) error {
+			cfg := input.Settings
+			if cfg.EmbyKey == "" && !input.ClearEmbyKey {
+				cfg.EmbyKey = st.Settings.EmbyKey
+			}
+			if e := validSettings(&cfg); e != nil {
+				return e
+			}
+			// long: 首次启用、换 Emby 服务器或更换凭据后，即使没有新下载，也要让 Emby 扫描已有媒体。
+			changed := cfg.EmbyEnabled != st.Settings.EmbyEnabled || cfg.EmbyURL != st.Settings.EmbyURL || cfg.EmbyKey != st.Settings.EmbyKey
+			embyChanged, embyEnabled = changed, cfg.EmbyEnabled
+			st.Settings = cfg
+			if changed {
+				st.Emby.Revision++
+				if cfg.EmbyEnabled {
+					st.Emby.Pending = true
+					st.Emby.NextAttempt = time.Now()
+					st.Emby.Error = ""
+				}
+			}
+			return nil
+		})
+		if e != nil {
+			return e
+		}
+		if embyChanged {
+			slog.Info("Emby 配置已更新", "enabled", embyEnabled)
+		}
+		writeJSON(w, 200, map[string]bool{"saved": true})
+		return nil
+	})
+	api("POST /api/sources/refresh", func(w http.ResponseWriter, r *http.Request) error {
+		if e := s.RefreshSources(r.Context()); e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]bool{"refreshed": true})
+		return nil
+	})
+	api("POST /api/sources/check", func(w http.ResponseWriter, r *http.Request) error {
+		summary, err := s.CheckSources(r.Context())
+		if err != nil {
+			return err
+		}
+		writeJSON(w, 200, summary)
+		return nil
+	})
+	api("POST /api/sources/{id}", func(w http.ResponseWriter, r *http.Request) error {
+		var input struct {
+			Enabled bool               `json:"enabled"`
+			Headers *map[string]string `json:"headers,omitempty"`
+		}
+		if e := decode(w, r, &input); e != nil {
+			return e
+		}
+		if input.Headers != nil {
+			for k, v := range *input.Headers {
+				if strings.ContainsAny(k+v, "\r\n") || strings.TrimSpace(k) == "" || strings.Contains(k, ":") {
+					return errors.New("请求头名称或值无效")
+				}
+			}
+		}
+		e := s.Store.Update(func(st *State) error {
+			for i := range st.Sources {
+				if st.Sources[i].ID == r.PathValue("id") {
+					// long: 修改请求头后仍允许上次被检测停用的站点在下次检测通过时自动恢复。
+					if input.Headers == nil || st.Sources[i].Enabled != input.Enabled {
+						st.Sources[i].DisabledByCheck = false
+					}
+					st.Sources[i].Enabled = input.Enabled
+					if input.Headers != nil {
+						st.Sources[i].Headers = *input.Headers
+					}
+					chooseDefaultSource(st.Sources)
+					return nil
+				}
+			}
+			return errors.New("站源不存在")
+		})
+		if e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]bool{"saved": true})
+		return nil
+	})
+	api("GET /api/home", func(w http.ResponseWriter, r *http.Request) error {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page < 1 {
+			page = 1
+		}
+		if page > 10000 {
+			return errors.New("页码过大")
+		}
+		typeID := strings.TrimSpace(r.URL.Query().Get("typeId"))
+		if len(typeID) > 100 {
+			return errors.New("分类标识过长")
+		}
+		result, err := s.Home(r.Context(), page, typeID)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, 200, result)
+		return nil
+	})
+	api("GET /api/search", func(w http.ResponseWriter, r *http.Request) error {
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" || len(q) > 200 {
+			return errors.New("请输入 1–200 字节的搜索词")
+		}
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page < 1 {
+			page = 1
+		}
+		if page > 10000 {
+			return errors.New("页码过大")
+		}
+		sources := s.Store.Snapshot().Sources
+		if id := r.URL.Query().Get("sourceId"); id != "" {
+			src, e := s.source(id)
+			if e != nil {
+				return e
+			}
+			sources = []Source{src}
+		}
+		writeJSON(w, 200, s.CMS.Search(r.Context(), sources, q, page))
+		return nil
+	})
+	api("GET /api/detail", func(w http.ResponseWriter, r *http.Request) error {
+		v, e := s.Detail(r.Context(), r.URL.Query().Get("sourceId"), r.URL.Query().Get("id"))
+		if e != nil {
+			return e
+		}
+		for i := range v.Lines {
+			for j := range v.Lines[i].Episodes {
+				v.Lines[i].Episodes[j].URL = ""
+			}
+		}
+		writeJSON(w, 200, v)
+		return nil
+	})
+	api("POST /api/jobs", func(w http.ResponseWriter, r *http.Request) error {
+		var sel Selection
+		if e := decode(w, r, &sel); e != nil {
+			return e
+		}
+		n, e := s.Queue(r.Context(), sel)
+		if e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]int{"queued": n})
+		return nil
+	})
+	api("POST /api/jobs/{id}/{action}", func(w http.ResponseWriter, r *http.Request) error {
+		if e := s.JobAction(r.PathValue("id"), r.PathValue("action")); e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]bool{"saved": true})
+		return nil
+	})
+	api("POST /api/follows", func(w http.ResponseWriter, r *http.Request) error {
+		var sel Selection
+		if e := decode(w, r, &sel); e != nil {
+			return e
+		}
+		if e := s.AddFollow(r.Context(), sel); e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]bool{"saved": true})
+		return nil
+	})
+	api("POST /api/follows/check", func(w http.ResponseWriter, r *http.Request) error {
+		if e := s.CheckFollows(r.Context()); e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]bool{"checked": true})
+		return nil
+	})
+	api("POST /api/follows/{id}/{action}", func(w http.ResponseWriter, r *http.Request) error {
+		if e := s.FollowAction(r.PathValue("id"), r.PathValue("action")); e != nil {
+			return e
+		}
+		writeJSON(w, 200, map[string]bool{"saved": true})
+		return nil
+	})
+	api("POST /api/emby/scan", func(w http.ResponseWriter, r *http.Request) error {
+		if e := s.RequestScan(); e != nil {
+			return e
+		}
+		writeJSON(w, 202, map[string]bool{"pending": true})
+		return nil
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: http: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		// long: 本机免口令模式还要限制 Host，避免恶意网页通过 DNS 重绑定读取收藏及服务器凭据。
+		host := r.Host
+		if h, _, e := net.SplitHostPort(host); e == nil {
+			host = h
+		}
+		ip := net.ParseIP(host)
+		if token == "" && host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			writeJSON(w, 403, map[string]string{"error": "本机模式拒绝此 Host"})
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
+				writeJSON(w, 401, map[string]string{"error": "请输入访问令牌"})
+				return
+			}
+			if origin := r.Header.Get("Origin"); origin != "" {
+				u, e := url.Parse(origin)
+				if e != nil || u.Host != r.Host || (u.Scheme != "http" && u.Scheme != "https") {
+					writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
+					return
+				}
+			}
+		}
+		mux.ServeHTTP(w, r)
+	})
+}

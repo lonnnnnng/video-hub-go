@@ -1,0 +1,7 @@
+/data/
+/media/
+/bin/
+/dist/
+/var/
+.DS_Store
+*.log
