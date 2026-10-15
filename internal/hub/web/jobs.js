@@ -53,6 +53,10 @@ function renderJobs() {
    metrics.append(line,progress);
   }else if(job.status==='completed'){
    const size=el('strong',formatBytes(job.sizeBytes),'task-size');size.title=job.output||'已下载文件';metrics.append(size);
+   const date=new Date(job.completedAt),valid=Number.isFinite(date.getTime())&&date.getFullYear()>1;
+   const completed=el('time',valid?'完成 '+new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(date).replaceAll('/','-'):'完成时间未知','task-completed');
+   if(valid){completed.dateTime=job.completedAt;completed.title='MP4 合成完成时间（当前时区）';}
+   metrics.append(completed);
   }else if(job.status==='queued'&&new Date(job.nextAttempt)>new Date()){
    metrics.append(el('span',new Date(job.nextAttempt).toLocaleTimeString('zh-CN')+' 后重试','task-wait'));
   }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestManualDefaultSourcePersists(t *testing.T) {
@@ -50,8 +51,16 @@ func TestManualDefaultSourcePersists(t *testing.T) {
 		t.Fatal("default not persisted")
 	}
 }
-func TestOldCompletedSizeBackfill(t *testing.T) {
-	s, _ := jobFilesFixture(t)
+func TestOldCompletedMediaInfoBackfill(t *testing.T) {
+	s, job := jobFilesFixture(t)
+	completed := time.Date(2026, 10, 14, 12, 34, 56, 0, time.UTC)
+	if err := os.Chtimes(job.Output, completed, completed); err != nil {
+		t.Fatal(err)
+	}
+	// long: v0.4.0 已保存大小但没有完成时间的任务也必须补齐，不能只处理两个字段都缺失的旧记录。
+	if err := s.Store.Update(func(st *State) error { st.Jobs[0].SizeBytes = 10; return nil }); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Store.Update(func(st *State) error { st.Sources = []Source{{ID: "source", Enabled: true, Default: true}}; return nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -61,11 +70,34 @@ func TestOldCompletedSizeBackfill(t *testing.T) {
 	if size := s.Store.Snapshot().Jobs[0].SizeBytes; size != 10 {
 		t.Fatalf("size=%d", size)
 	}
+	if got := s.Store.Snapshot().Jobs[0].CompletedAt; !got.Equal(completed) {
+		t.Fatalf("completedAt=%s, want MP4 time %s", got, completed)
+	}
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:4444/api/state", nil)
 	res := httptest.NewRecorder()
 	s.Handler().ServeHTTP(res, req)
 	if !strings.Contains(res.Body.String(), `"sizeBytes":10`) {
 		t.Fatal("size absent from state API")
+	}
+	var response struct {
+		State State `json:"state"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.State.Jobs) != 1 || !response.State.Jobs[0].CompletedAt.Equal(completed) {
+		t.Fatal("MP4 completion time absent from state API")
+	}
+	var saved []Job
+	data, err := os.ReadFile(s.Store.dir + "/jobs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if !saved[0].CompletedAt.Equal(completed) {
+		t.Fatal("completion time not persisted")
 	}
 }
 func TestWebUpdateRejectsUnauthorisedBodies(t *testing.T) {

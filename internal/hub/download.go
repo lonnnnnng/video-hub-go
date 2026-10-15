@@ -299,6 +299,8 @@ func (s *Service) publish(ctx context.Context, j Job, from string, cfg Settings)
 				st.Jobs[i].Status = "completed"
 				st.Jobs[i].Output = dest
 				st.Jobs[i].SizeBytes = info.Size()
+				// long: 正常发布和崩溃恢复都保留 MP4 合成后的时间，不使用补写任务状态的时间。
+				st.Jobs[i].CompletedAt = info.ModTime()
 				st.Jobs[i].Progress = 1
 				st.Jobs[i].Speed = ""
 				st.Jobs[i].Error = ""

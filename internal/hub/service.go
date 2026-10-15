@@ -53,11 +53,14 @@ func (s *Service) Start() error {
 	if err := s.Store.Update(func(st *State) error {
 		for i := range st.Jobs {
 			j := &st.Jobs[i]
-			// long: 旧版已完成任务没有大小字段，启动时补齐一次，避免页面每次轮询都访问磁盘。
-			if j.Status == "completed" && j.SizeBytes == 0 {
+			// long: 旧任务的大小或合成时间在启动时从已归档 MP4 补齐，页面轮询不再反复访问磁盘。
+			if j.Status == "completed" && (j.SizeBytes == 0 || j.CompletedAt.IsZero()) {
 				if file, err := openJobMedia(*j); err == nil {
 					if info, err := file.Stat(); err == nil && info.Mode().IsRegular() {
 						j.SizeBytes = info.Size()
+						if j.CompletedAt.IsZero() {
+							j.CompletedAt = info.ModTime()
+						}
 					}
 					file.Close()
 				}

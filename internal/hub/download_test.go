@@ -1,11 +1,52 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestPublishKeepsMP4CompletionTime(t *testing.T) {
+	for _, recoverExisting := range []bool{false, true} {
+		t.Run(map[bool]string{false: "new", true: "recovered"}[recoverExisting], func(t *testing.T) {
+			s, job := jobFilesFixture(t)
+			completed := time.Date(2026, 10, 14, 12, 34, 56, 0, time.UTC)
+			from := filepath.Join(t.TempDir(), "merged.mp4")
+			if recoverExisting {
+				from = job.Output
+			} else {
+				if err := os.Remove(job.Output); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Remove(job.Output + ".moviehub.json"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(from, []byte("merged video"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Chtimes(from, completed, completed); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Store.Update(func(st *State) error { st.Jobs[0].Status = "downloading"; return nil }); err != nil {
+				t.Fatal(err)
+			}
+			if recoverExisting {
+				from = ""
+			}
+			if err := s.publish(context.Background(), job, from, s.Store.Snapshot().Settings); err != nil {
+				t.Fatal(err)
+			}
+			got := s.Store.Snapshot().Jobs[0]
+			if got.Status != "completed" || !got.CompletedAt.Equal(completed) {
+				t.Fatalf("completion time changed during publication: %+v", got)
+			}
+		})
+	}
+}
 
 func TestReceiptIsNeverOverwritten(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "episode.moviehub.json")

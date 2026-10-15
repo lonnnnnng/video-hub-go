@@ -32,7 +32,7 @@ Go 服务内置网页管理台与 HLS 下载器，部署时无需单独运行下
 | 在线预览 | 详情弹框内播放 HLS，支持上一集、下一集；浏览器直接访问站源媒体地址。 |
 | 自动追更 | 定时检查新集，可开启自动下载，也可在添加追更时回补已有分集。 |
 | 并发下载 | 同时下载多集，每集并发获取 HLS 分片，经 FFmpeg 封装为 MP4，再由 FFprobe 校验。 |
-| 队列管理 | 紧凑任务列表与固定筛选栏，按剧名、分集和状态筛选；下载中显示速度，完成后显示文件大小。支持暂停、继续、取消、重试和删除任务或文件。 |
+| 队列管理 | 桌面三列紧凑队列与固定筛选栏，按剧名、分集和状态筛选；下载中显示速度，完成后显示文件大小与 MP4 合成时间。支持暂停、继续、取消、重试和删除任务或文件。 |
 | 本地播放 | 已完成任务通过 HTTP 播放本地 MP4，支持 Range 请求和拖动进度，无需转码。 |
 | Emby 入库 | 自动整理剧集与季度目录、生成 NFO，文件发布完成后通知 Emby 扫描，失败保留待办重试。 |
 | 轻量运维 | 分类 JSON 存储、原子写入、关键事件日志、systemd 管理；导航底部显示版本与发行时间，可检测并安装新版。 |
@@ -52,10 +52,10 @@ Go 服务内置网页管理台与 HLS 下载器，部署时无需单独运行下
 
 ### 方式一：使用 Linux Release
 
-以下命令在 **Linux 服务器**执行，示例安装 v0.4.0。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
+以下命令在 **Linux 服务器**执行，示例安装 v0.4.1。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
 
 ```bash
-version=v0.4.0
+version=v0.4.1
 git clone --depth 1 --branch "$version" https://github.com/lonnnnnng/video-hub-go.git
 cd video-hub-go
 
@@ -215,7 +215,7 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 健康检查入口为 `GET /healthz`，例如：
 
 ```json
-{"status":"ok","version":"v0.4.0"}
+{"status":"ok","version":"v0.4.1"}
 ```
 
 服务关键事件输出到标准错误流，systemd 部署通过 journal 查看，包括站源检测、追更、下载、合并、入库和 Emby 通知。HTTP 日志不记录搜索词、播放 URL、请求头、请求体或 API Key。
@@ -311,11 +311,19 @@ go vet ./...
 生成 Linux 双架构发布程序，并注入版本号：
 
 ```bash
-MOVIEHUB_VERSION=v0.4.0 ./scripts/build-linux.sh
+MOVIEHUB_VERSION=v0.4.1 ./scripts/build-linux.sh
 ```
 
 产物位于 `dist/`：`moviehub-linux-amd64`、`moviehub-linux-arm64`、`SHA256SUMS`。普通源码构建的健康版本默认为 `dev`。
 
 发行时间默认读取对应 GitHub Release 的 `published_at`。若构建时已知真实发行时间，可通过 `MOVIEHUB_RELEASE_TIME` 注入 RFC 3339 时间；构建时间不会作为发行时间展示。
+
+### GitHub Actions 发版流水线
+
+[Release 流水线](.github/workflows/release.yml) 仅在推送 `v主版本.次版本.修订版本` 标签时执行。**普通代码推送不触发流水线发版；只有明确要求发版时，才在推送代码后创建并推送版本标签。**
+
+流水线先运行 Go 竞态测试、`go vet` 与 JavaScript 语法检查，再调用已有脚本构建 Linux 双架构程序及 `SHA256SUMS`。资产上传到草稿 Release 后重新下载校验，全部通过才公开。使用仓库内置 `GITHUB_TOKEN`，无需额外配置发布令牌。
+
+发版步骤、失败重跑和部署验证见 [发版说明](docs/release.md)。
 
 内置 HLS.js 1.7.3，采用 Apache 2.0 许可证；上游版权与许可文本见 [hls.LICENSE.txt](internal/hub/web/hls.LICENSE.txt)。

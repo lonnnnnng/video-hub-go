@@ -1,0 +1,101 @@
+name: 发布 Linux Release
+
+# long: 普通分支推送不发版；仅在明确发版后推送版本标签，才构建和发布对应程序。
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'lonnnnnng/video-hub-go'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: 检出版本代码
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: 校验正式版本标签
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo '仅支持 v主版本.次版本.修订版本 格式的正式标签' >&2
+            exit 1
+          }
+
+      - name: 配置 Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: 配置 JavaScript 检查环境
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+
+      - name: 测试与静态检查
+        run: |
+          set -euo pipefail
+          go test -race ./...
+          go vet ./...
+          for script in internal/hub/web/*.js; do
+            node --check "$script"
+          done
+
+      - name: 构建 Linux 双架构程序
+        env:
+          MOVIEHUB_VERSION: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          ./scripts/build-linux.sh
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: 上传草稿并回验资产
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="docs/releases/$RELEASE_TAG.md"
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+            # long: 允许重跑尚未公开的失败草稿，已发行版本保持不变，避免用户拿到同标签的不同程序。
+            [[ "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" == true ]] || {
+              echo '该版本已公开，不能覆盖，请使用新版本标签' >&2
+              exit 1
+            }
+            gh release upload "$RELEASE_TAG" dist/moviehub-linux-amd64 dist/moviehub-linux-arm64 dist/SHA256SUMS --clobber
+          else
+            args=(--draft --verify-tag --title "$RELEASE_TAG")
+            if [[ -f "$notes" ]]; then args+=(--notes-file "$notes"); else args+=(--generate-notes); fi
+            gh release create "$RELEASE_TAG" dist/moviehub-linux-amd64 dist/moviehub-linux-arm64 dist/SHA256SUMS "${args[@]}"
+          fi
+          gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/release-verify"
+          (cd "$RUNNER_TEMP/release-verify" && sha256sum -c SHA256SUMS)
+          for asset in moviehub-linux-amd64 moviehub-linux-arm64 SHA256SUMS; do
+            cmp "dist/$asset" "$RUNNER_TEMP/release-verify/$asset"
+          done
+
+      - name: 公开正式 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --draft=false --latest
+          gh release view "$RELEASE_TAG" --json tagName,url,publishedAt

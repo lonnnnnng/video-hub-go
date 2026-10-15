@@ -92,6 +92,8 @@ type Job struct {
 	Error       string    `json:"error,omitempty"`
 	Output      string    `json:"output,omitempty"`
 	SizeBytes   int64     `json:"sizeBytes,omitempty"`
+	// long: 完成时间固定取最终 MP4 的修改时间，服务重启和任务恢复不能改写为当前时间。
+	CompletedAt time.Time `json:"completedAt,omitzero"`
 	// long: 入队时冻结落盘目录，调整全局设置不会把暂停任务的分片和最终文件拆到不同位置。
 	MediaDir  string    `json:"mediaDir"`
 	CreatedAt time.Time `json:"createdAt"`
