@@ -56,6 +56,8 @@ sudo install -m 0644 scripts/moviehub-update.py /usr/local/bin/moviehub-update.p
 
 ## 管理与日志
 
+完整命令、环境变量、用户服务与系统服务示例，以及在线升级排查方式见 [服务管理脚本说明](service-management.md)。
+
 当前服务器的用户服务可以直接运行 `scripts/moviehub-service.sh status`、`logs`、`health`、`check-update`、`update`。上述 `/etc/systemd/system` 示例属于系统服务，使用 `/usr/local/bin/moviehub-service` 前需设置：
 
 ```bash
