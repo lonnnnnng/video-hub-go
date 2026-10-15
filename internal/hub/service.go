@@ -18,6 +18,8 @@ type Service struct {
 	cancel   context.CancelFunc
 	mu       sync.Mutex
 	active   map[string]context.CancelFunc
+	workers  map[string]chan struct{}
+	deleting map[string]bool
 	started  bool
 	wg       sync.WaitGroup
 	followMu sync.Mutex
@@ -29,7 +31,7 @@ var errJobChanged = errors.New("任务状态已变化")
 
 func NewService(store *Store) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{Store: store, CMS: NewCMS(), ctx: ctx, cancel: cancel, active: map[string]context.CancelFunc{}}
+	return &Service{Store: store, CMS: NewCMS(), ctx: ctx, cancel: cancel, active: map[string]context.CancelFunc{}, workers: map[string]chan struct{}{}, deleting: map[string]bool{}}
 }
 func uid() string {
 	var b [12]byte
@@ -453,6 +455,9 @@ func (s *Service) FollowAction(id, action string) error {
 func (s *Service) JobAction(id, action string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.deleting[id] {
+		return errors.New("任务正在删除，请稍候")
+	}
 	err := s.Store.Update(func(st *State) error {
 		for i := range st.Jobs {
 			j := &st.Jobs[i]
@@ -508,7 +513,7 @@ func (s *Service) dispatch() {
 		if capacity <= 0 {
 			break
 		}
-		if j.Status != "queued" || j.NextAttempt.After(time.Now()) {
+		if j.Status != "queued" || j.NextAttempt.After(time.Now()) || s.deleting[j.ID] || s.workers[j.ID] != nil {
 			continue
 		}
 		if _, ok := s.active[j.ID]; ok {
@@ -540,9 +545,23 @@ func (s *Service) dispatch() {
 		}
 		ctx, cancel := context.WithCancel(s.ctx)
 		s.active[job.ID] = cancel
+		done := make(chan struct{})
+		s.workers[job.ID] = done
 		slog.Info("下载任务开始", "job_id", job.ID, "attempt", job.Attempts, "active_jobs", len(s.active))
 		s.wg.Add(1)
-		go func() { defer s.wg.Done(); s.runJob(ctx, job); cancel() }()
+		go func() {
+			defer s.wg.Done()
+			defer func() {
+				cancel()
+				// long: 删除文件前必须等本次下载及 FFmpeg 全部退出，防止清理后又写回分片。
+				s.mu.Lock()
+				delete(s.active, job.ID)
+				delete(s.workers, job.ID)
+				close(done)
+				s.mu.Unlock()
+			}()
+			s.runJob(ctx, job)
+		}()
 		capacity--
 	}
 }

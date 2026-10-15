@@ -1,9 +1,20 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#20343b"><title>我的追更 · 片库</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#20343b"><title>我的追更 · 片库</title><link rel="stylesheet" href="/style.css"><script src="/hls.min.js" defer></script><script src="/app.js" defer></script><script src="/detail.js" defer></script></head>
 <body data-page="follows">
   <aside class="sidebar"><a class="brand" href="/" aria-label="片库首页"><span class="brand-mark" aria-hidden="true">▣</span><span>片库<small>Movie Hub</small></span></a><nav aria-label="主导航"><a href="/"><span aria-hidden="true">⌂</span>首页</a><a href="/follows.html" class="selected" aria-current="page"><span aria-hidden="true">◷</span>我的追更</a><a href="/jobs.html"><span aria-hidden="true">↓</span>下载队列 <span id="queueCount" class="nav-count"></span></a><a href="/sources.html"><span aria-hidden="true">◈</span>资源站</a><a href="/settings.html"><span aria-hidden="true">⚙</span>服务设置</a></nav><div class="sidebar-bottom"><p>让喜欢的剧集<br>有一个自己的片库。</p></div></aside>
   <main class="workspace"><p id="notice" class="notice" role="status" hidden></p><section class="page"><div class="section-head"><div><h2>正在追的剧</h2><p>新集会按设置的间隔检查。</p></div><button id="checkFollows" type="button" class="primary">立即检查更新</button></div><div id="followList" class="stack-list"></div></section></main>
-  <dialog id="detailDialog" class="detail-dialog"><div class="dialog-top"><h2 id="detailTitle">剧集详情</h2><button id="closeDetail" type="button" aria-label="关闭详情">✕</button></div><p id="detailMeta" class="detail-meta"></p><p id="detailPlot"></p><div class="detail-options"><label>播放线路<select id="lineSelect"></select></label><label>季号<input id="season" type="number" min="1" max="999" value="1"></label><button id="selectAll" type="button">全选 / 清空</button></div><p id="episodeHint" class="field-hint"></p><div id="episodes" class="episodes"></div><div class="detail-footer"><div class="detail-checks"><label class="check"><input id="autoDownload" type="checkbox" checked>追更新集自动下载</label><label class="check"><input id="backfill" type="checkbox">追更时补齐已有集</label></div><div class="actions"><button id="addFollow" type="button">加入追更</button><button id="queueEpisodes" type="button" class="primary">下载所选分集</button></div></div></dialog>
+  <dialog id="detailDialog" class="detail-dialog" aria-labelledby="detailTitle">
+    <header class="dialog-top"><div><h2 id="detailTitle">剧集详情</h2><p id="detailMeta" class="detail-meta"></p></div><button id="closeDetail" type="button" aria-label="关闭详情">关闭</button></header>
+    <div class="detail-body">
+      <section class="preview-pane" aria-label="播放预览">
+        <div class="player-stage"><video id="previewVideo" controls playsinline preload="none" aria-label="剧集播放器"></video><div id="playerEmpty" class="player-empty"><span>选择分集，预览播放</span><button id="startPlayback" class="primary" type="button">播放第一集</button></div></div>
+        <div class="player-toolbar"><div><strong id="playingEpisode">选择分集开始播放</strong><p id="playerStatus" role="status" aria-live="polite">点击右侧分集名称播放，勾选方框加入下载。</p></div><div class="actions"><button id="retryPlayback" type="button" hidden>重新播放</button><button id="previousEpisode" type="button" aria-label="播放上一集" disabled>上一集</button><button id="nextEpisode" type="button" aria-label="播放下一集" disabled>下一集</button></div></div>
+        <details id="plotDisclosure" class="plot-disclosure"><summary>剧情简介</summary><p id="detailPlot"></p></details>
+      </section>
+      <section class="episode-pane" aria-labelledby="episodeHeading"><div class="episode-heading"><div><h3 id="episodeHeading">选集</h3><span id="episodeHint"></span></div><button id="selectAll" type="button">全选下载</button></div><div id="episodes" class="episodes"></div><p id="detailActionStatus" class="field-hint" role="status" hidden></p></section>
+    </div>
+    <footer class="detail-footer"><div class="detail-checks"><label class="check"><input id="autoDownload" type="checkbox" checked>追更新集自动下载</label><label class="check"><input id="backfill" type="checkbox">追更时补齐已有集</label></div><div class="actions"><span id="selectionCount">已选 0 集</span><button id="addFollow" type="button">加入追更</button><button id="queueEpisodes" type="button" class="primary" disabled>下载所选分集</button></div></footer>
+  </dialog>
 </body>
 </html>

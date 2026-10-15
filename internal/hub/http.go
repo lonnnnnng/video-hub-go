@@ -132,11 +132,7 @@ func (s *Service) Handler() http.Handler {
 			_, err := exec.LookPath(bin)
 			tools[name] = err == nil
 		}
-		headers := map[string]bool{}
-		for _, src := range st.Sources {
-			headers[src.ID] = len(src.Headers) > 0
-		}
-		writeJSON(w, 200, map[string]any{"state": redact(st), "tools": tools, "embyKeySet": st.Settings.EmbyKey != "", "sourceHeadersSet": headers})
+		writeJSON(w, 200, map[string]any{"state": redact(st), "tools": tools, "embyKeySet": st.Settings.EmbyKey != ""})
 		return nil
 	})
 	api("POST /api/settings", func(w http.ResponseWriter, r *http.Request) error {
@@ -196,30 +192,17 @@ func (s *Service) Handler() http.Handler {
 	})
 	api("POST /api/sources/{id}", func(w http.ResponseWriter, r *http.Request) error {
 		var input struct {
-			Enabled bool               `json:"enabled"`
-			Headers *map[string]string `json:"headers,omitempty"`
+			Enabled bool `json:"enabled"`
 		}
 		if e := decode(w, r, &input); e != nil {
 			return e
 		}
-		if input.Headers != nil {
-			for k, v := range *input.Headers {
-				if strings.ContainsAny(k+v, "\r\n") || strings.TrimSpace(k) == "" || strings.Contains(k, ":") {
-					return errors.New("请求头名称或值无效")
-				}
-			}
-		}
 		e := s.Store.Update(func(st *State) error {
 			for i := range st.Sources {
 				if st.Sources[i].ID == r.PathValue("id") {
-					// long: 修改请求头后仍允许上次被检测停用的站点在下次检测通过时自动恢复。
-					if input.Headers == nil || st.Sources[i].Enabled != input.Enabled {
-						st.Sources[i].DisabledByCheck = false
-					}
+					// long: 手动调整开关代表用户选择，后续检测不再按上次自动禁用状态恢复站源。
+					st.Sources[i].DisabledByCheck = false
 					st.Sources[i].Enabled = input.Enabled
-					if input.Headers != nil {
-						st.Sources[i].Headers = *input.Headers
-					}
 					chooseDefaultSource(st.Sources)
 					return nil
 				}
@@ -296,12 +279,20 @@ func (s *Service) Handler() http.Handler {
 		return nil
 	})
 	api("POST /api/jobs/{id}/{action}", func(w http.ResponseWriter, r *http.Request) error {
+		if action := r.PathValue("action"); action == "remove" || action == "remove-files" {
+			if err := s.DeleteJob(r.Context(), r.PathValue("id"), action == "remove-files"); err != nil {
+				return err
+			}
+			writeJSON(w, 200, map[string]bool{"deleted": true})
+			return nil
+		}
 		if e := s.JobAction(r.PathValue("id"), r.PathValue("action")); e != nil {
 			return e
 		}
 		writeJSON(w, 200, map[string]bool{"saved": true})
 		return nil
 	})
+	mux.HandleFunc("GET /api/jobs/{id}/media", s.serveJobMedia)
 	api("POST /api/follows", func(w http.ResponseWriter, r *http.Request) error {
 		var sel Selection
 		if e := decode(w, r, &sel); e != nil {
@@ -338,7 +329,8 @@ func (s *Service) Handler() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: http: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		// long: 浏览器直接请求站源媒体，允许 HTTP/HTTPS 片单和分片连接；脚本仍只加载服务内置资源。
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: http: data:; connect-src 'self' https: http:; media-src 'self' https: http: blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		// long: 局域网免令牌模式只接受 IP 或 localhost，避免恶意域名通过 DNS 重绑定读取片库设置。
 		host := r.Host
 		if value, _, err := net.SplitHostPort(host); err == nil {
