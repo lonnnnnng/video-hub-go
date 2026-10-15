@@ -21,16 +21,16 @@ Movie Hub Go 是个人使用的剧集管理服务：从 JSON 格式的 MacCMS �
 
 ```zsh
 ./scripts/build.sh
-./scripts/run.sh --listen 127.0.0.1:4488 --data-dir ./data --media-dir ./media
+./scripts/run.sh --listen 127.0.0.1:4444 --data-dir ./data --media-dir ./media
 ```
 
 Linux 部署可用 [`scripts/build-linux.sh`](scripts/build-linux.sh) 构建 `amd64`/`arm64` 程序，使用 [`scripts/render-systemd.sh`](scripts/render-systemd.sh) 生成服务文件，再用 [`scripts/moviehub-service.sh`](scripts/moviehub-service.sh) 管理状态、日志和健康检查。具体步骤见 [`docs/linux-deployment.md`](docs/linux-deployment.md)。应用关键事件输出到标准错误流；在 systemd 下通过 journal 查看，不记录令牌、播放 URL 或资源站请求头。
 
-打开 `http://127.0.0.1:4488`。首次启动会导入资源站清单。首次使用时在“设置”检查媒体目录、FFmpeg 和 FFprobe 路径；如需 Emby 同步，让 Emby 的“电视节目”媒体库读取同一媒体目录（跨容器时挂载同一宿主目录），再配置 Emby 服务器 URL 和管理员 API Key 后启用。服务会请求 `POST /Library/Refresh`，以 `X-Emby-Token` 传递密钥；扫描完成时间由 Emby 决定，页面中的时间表示刷新请求已被接受。
+打开 `http://127.0.0.1:4444`。首次启动会导入资源站清单。首次使用时在“设置”检查媒体目录、FFmpeg 和 FFprobe 路径；如需 Emby 同步，让 Emby 的“电视节目”媒体库读取同一媒体目录（跨容器时挂载同一宿主目录），再配置 Emby 服务器 URL 和管理员 API Key 后启用。服务会请求 `POST /Library/Refresh`，以 `X-Emby-Token` 传递密钥；扫描完成时间由 Emby 决定，页面中的时间表示刷新请求已被接受。
 
 管理台按菜单使用独立页面：首页 `/`、追更 `/follows.html`、下载 `/jobs.html`、资源站 `/sources.html`、设置 `/settings.html`。各页共用 `/app.js` 和 `/style.css`，在手机宽度下会调整导航和内容布局。
 
-默认只监听本机。局域网使用时显式设置 `--listen 192.168.1.2:4488` 等服务器内网地址。管理 API 不再要求访问令牌，因此只应绑定可信局域网接口，不要映射到公网。
+默认只监听本机。局域网使用时显式设置 `--listen 192.168.1.2:4444` 等服务器内网地址。管理 API 不再要求访问令牌，因此只应绑定可信局域网接口，不要映射到公网。
 
 Linux 用户服务可用 `scripts/moviehub-service.sh check-update` 检查公开 GitHub Release，用 `scripts/moviehub-service.sh update` 在线下载、SHA256 校验并升级。升级脚本原子替换程序、重启服务并核对 `/healthz` 的版本；启动失败会恢复旧程序。
 

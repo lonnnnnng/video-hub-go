@@ -6,7 +6,7 @@ service_user="${MOVIEHUB_USER:-$(id -un)}"
 install_dir="${MOVIEHUB_INSTALL_DIR:-$project_root}"
 data_dir="${MOVIEHUB_DATA_DIR:-${install_dir}/data}"
 media_dir="${MOVIEHUB_MEDIA_DIR:-${install_dir}/media}"
-listen="${MOVIEHUB_LISTEN:-127.0.0.1:4488}"
+listen="${MOVIEHUB_LISTEN:-127.0.0.1:4444}"
 service_name="${MOVIEHUB_SERVICE_NAME:-video-hub-go}"
 
 if [[ ! "$service_user" =~ ^[a-z_][a-z0-9_-]*$ || ! "$service_name" =~ ^[a-z][a-z0-9_-]*$ ]]; then

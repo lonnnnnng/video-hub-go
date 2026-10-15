@@ -34,7 +34,7 @@ MOVIEHUB_USER=moviehub \
 MOVIEHUB_INSTALL_DIR=/opt/moviehub \
 MOVIEHUB_DATA_DIR=/var/lib/moviehub \
 MOVIEHUB_MEDIA_DIR=/srv/moviehub/media \
-MOVIEHUB_LISTEN=127.0.0.1:4488 \
+MOVIEHUB_LISTEN=127.0.0.1:4444 \
 ./scripts/render-systemd.sh
 ```
 
@@ -45,12 +45,12 @@ sudo install -m 0644 /tmp/video-hub-go.XXXXXXXX.service /etc/systemd/system/vide
 sudo systemctl daemon-reload
 sudo systemctl enable --now video-hub-go.service
 systemctl status video-hub-go.service --no-pager
-curl --fail http://127.0.0.1:4488/healthz
+curl --fail http://127.0.0.1:4444/healthz
 sudo install -m 0755 scripts/moviehub-service.sh /usr/local/bin/moviehub-service
 sudo install -m 0644 scripts/moviehub-update.py /usr/local/bin/moviehub-update.py
 ```
 
-把示例中的 `/tmp/moviehub.XXXXXXXX.service` 换成脚本打印的实际路径。局域网使用时将 `MOVIEHUB_LISTEN` 指向服务器内网地址，例如 `192.168.1.2:4488`。管理接口无需访问令牌，不要将端口映射到公网。
+把示例中的 `/tmp/video-hub-go.XXXXXXXX.service` 换成脚本打印的实际路径。局域网使用时将 `MOVIEHUB_LISTEN` 指向服务器内网地址，例如 `192.168.1.2:4444`。管理接口无需访问令牌，不要将端口映射到公网。
 
 如果在管理台把媒体目录改到 unit `ReadWritePaths` 以外，还需同步更新 unit、执行 `daemon-reload` 并重启；否则 systemd 沙箱可能阻止写入。状态目录和媒体目录也需要足够磁盘空间与共享权限。
 

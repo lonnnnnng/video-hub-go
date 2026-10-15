@@ -18,9 +18,9 @@ func TestLANAccessWithoutToken(t *testing.T) {
 		name, host, origin string
 		want               int
 	}{
-		{"局域网地址免令牌", "192.168.1.2:4488", "", http.StatusOK},
-		{"跨站请求被拒绝", "192.168.1.2:4488", "http://example.com", http.StatusForbidden},
-		{"域名重绑定被拒绝", "example.com:4488", "", http.StatusForbidden},
+		{"局域网地址免令牌", "192.168.1.2:4444", "", http.StatusOK},
+		{"跨站请求被拒绝", "192.168.1.2:4444", "http://example.com", http.StatusForbidden},
+		{"域名重绑定被拒绝", "example.com:4444", "", http.StatusForbidden},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, "http://"+tc.host+"/api/state", nil)
