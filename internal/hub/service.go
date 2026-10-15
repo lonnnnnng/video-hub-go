@@ -25,13 +25,14 @@ type Service struct {
 	followMu sync.Mutex
 	embyMu   sync.Mutex
 	checkMu  sync.Mutex
+	updates  *updateManager
 }
 
 var errJobChanged = errors.New("任务状态已变化")
 
 func NewService(store *Store) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{Store: store, CMS: NewCMS(), ctx: ctx, cancel: cancel, active: map[string]context.CancelFunc{}, workers: map[string]chan struct{}{}, deleting: map[string]bool{}}
+	return &Service{Store: store, CMS: NewCMS(), ctx: ctx, cancel: cancel, active: map[string]context.CancelFunc{}, workers: map[string]chan struct{}{}, deleting: map[string]bool{}, updates: newUpdateManager(store.dir)}
 }
 func uid() string {
 	var b [12]byte
@@ -52,6 +53,15 @@ func (s *Service) Start() error {
 	if err := s.Store.Update(func(st *State) error {
 		for i := range st.Jobs {
 			j := &st.Jobs[i]
+			// long: 旧版已完成任务没有大小字段，启动时补齐一次，避免页面每次轮询都访问磁盘。
+			if j.Status == "completed" && j.SizeBytes == 0 {
+				if file, err := openJobMedia(*j); err == nil {
+					if info, err := file.Stat(); err == nil && info.Mode().IsRegular() {
+						j.SizeBytes = info.Size()
+					}
+					file.Close()
+				}
+			}
 			if j.Status == "downloading" {
 				recovered++
 				j.Status = "queued"
@@ -487,6 +497,7 @@ func (s *Service) JobAction(id, action string) error {
 				return errors.New("未知任务操作")
 			}
 			j.UpdatedAt = time.Now()
+			j.Speed = ""
 			return nil
 		}
 		return errors.New("任务不存在")

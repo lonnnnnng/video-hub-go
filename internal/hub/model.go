@@ -91,6 +91,7 @@ type Job struct {
 	NextAttempt time.Time `json:"nextAttempt"`
 	Error       string    `json:"error,omitempty"`
 	Output      string    `json:"output,omitempty"`
+	SizeBytes   int64     `json:"sizeBytes,omitempty"`
 	// long: 入队时冻结落盘目录，调整全局设置不会把暂停任务的分片和最终文件拆到不同位置。
 	MediaDir  string    `json:"mediaDir"`
 	CreatedAt time.Time `json:"createdAt"`

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 type hlsTransport func(*http.Request) (*http.Response, error)
@@ -204,12 +205,9 @@ func TestEmbeddedHLSFMP4ByteRange(t *testing.T) {
 
 func TestHLSCancelStopsInflightSegments(t *testing.T) {
 	started := make(chan struct{})
+	var startedOnce sync.Once
 	f := &hlsFetcher{client: &http.Client{Transport: hlsTransport(func(req *http.Request) (*http.Response, error) {
-		select {
-		case <-started:
-		default:
-			close(started)
-		}
+		startedOnce.Do(func() { close(started) })
 		<-req.Context().Done()
 		return nil, req.Context().Err()
 	})}}
@@ -222,5 +220,30 @@ func TestHLSCancelStopsInflightSegments(t *testing.T) {
 	cancel()
 	if err := <-result; !errors.Is(err, context.Canceled) {
 		t.Fatalf("暂停未中断分片请求: %v", err)
+	}
+}
+
+func TestHLSReportsSpeedBeforeSegmentCompletes(t *testing.T) {
+	reader, writer := io.Pipe()
+	f := &hlsFetcher{client: &http.Client{Transport: hlsTransport(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: reader, Request: req}, nil
+	})}}
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	defer reader.Close()
+	defer writer.Close()
+	go func() { _, _ = writer.Write(bytes.Repeat([]byte("a"), 4096)) }()
+	live := false
+	err := fetchHLSParts(ctx, f, []hlsPart{{url: "https://example.com/a.ts", name: "a.ts"}}, t.TempDir(), 1, func(p float64, speed string) {
+		if p == 0 && speed != "0.0 B/s" && speed != "" {
+			live = true
+			writer.Close()
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !live {
+		t.Fatal("no speed reported during an unfinished segment")
 	}
 }

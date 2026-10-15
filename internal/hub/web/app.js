@@ -10,7 +10,7 @@ let homeClasses = [];
 const collectionPageSize = 20;
 let homeCache, searchCache;
 const labels = {queued:'等待下载',downloading:'下载中',paused:'已暂停',canceled:'已取消',failed:'下载失败',completed:'已入库'};
-function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'error' : ''; $('notice').hidden = false; }
+function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'notice error' : 'notice'; $('notice').hidden = false; }
 async function api(path, body) {
  const headers = {};
  const options = {headers};
@@ -154,14 +154,16 @@ function renderSources(){
  sources.forEach(src=>{
   const row=el('article',undefined,'source-row'+(src.enabled?'':' source-disabled'));
   const main=el('div',undefined,'source-main'),title=el('div',undefined,'source-title');title.append(el('h3',src.name));
-  if(src.default){const star=el('span',undefined,'source-default');star.append(icon('star'));star.title='默认站源';star.setAttribute('role','img');star.setAttribute('aria-label','默认站源');title.append(star);}
   main.append(title);let host=src.api;try{host=new URL(src.api).host;}catch{}
   const address=el('p',host,'source-address');address.title=src.api;main.append(address);
   const status=src.checkStatus==='ok'?'可搜索':src.checkStatus==='unreachable'?'连接失败':src.checkStatus==='unsearchable'?'不可搜索':'未检测';
   const state=el('span',undefined,'source-state '+(src.checkStatus==='ok'?'good':src.checkStatus?'bad':''));state.append(icon(src.checkStatus==='ok'?'check':src.checkStatus?'cross':'help'));state.title=[status,src.checkError].filter(Boolean).join('：');state.setAttribute('role','img');state.setAttribute('aria-label',state.title);
   const metrics=el('div',undefined,'source-metrics'),latency=el('span',src.latencyMs?src.latencyMs+' ms':'—','source-latency');latency.title='搜索延迟';metrics.append(state,latency);
   const toggle=iconButton('power',(src.enabled?'停用 ':'启用 ')+src.name,async()=>{try{await api('sources/'+encodeURIComponent(src.id),{enabled:!src.enabled});}finally{await refresh();}});toggle.classList.toggle('is-on',src.enabled);toggle.setAttribute('aria-pressed',String(src.enabled));
-  row.append(main,metrics,toggle);root.append(row);
+  const choose=iconButton('star',src.default?'当前默认站源':src.enabled?'设为默认站源：'+src.name:'请先启用 '+src.name,async()=>{await api('sources/'+encodeURIComponent(src.id)+'/default',{});await refresh();notice('默认站源已切换为 '+src.name);});
+  choose.classList.toggle('is-default',src.default);choose.setAttribute('aria-pressed',String(src.default));choose.disabled=!src.enabled||src.default;
+  const actions=el('div',undefined,'source-actions');actions.append(choose,toggle);
+  row.append(main,metrics,actions);root.append(row);
  });
 }
 if ($('refreshSources')) {setButtonIcon($('refreshSources'),'refresh','刷新站源清单');$('refreshSources').onclick=()=>act($('refreshSources'),async()=>{await api('sources/refresh',{});await refresh();notice('站源清单已刷新');});}

@@ -26,32 +26,50 @@ function openDeleteJob(job) {
  $('confirmDeleteJob').disabled=false;
  deleteDialog.showModal();
 }
+function formatBytes(bytes) {
+ if(!Number.isFinite(bytes)||bytes<=0)return '大小未知';
+ const units=['B','KB','MB','GB','TB'];let i=0;
+ while(bytes>=1024&&i<units.length-1){bytes/=1024;i++;}
+ return bytes.toLocaleString('zh-CN',{maximumFractionDigits:i?1:0})+' '+units[i];
+}
 function renderJobs() {
+ if(!snapshot)return;
  const root=$('jobList');root.replaceChildren();
- const filter=$('jobFilter').value;
- const jobs=[...snapshot.state.jobs].reverse().filter(job=>!filter||(filter==='active'?['queued','downloading'].includes(job.status):job.status===filter));
- if(!jobs.length){empty(root,'当前没有任务，搜索剧集后选择分集下载');return;}
+ const filter=$('jobFilter').value,query=$('jobSearch').value.trim().toLocaleLowerCase();
+ const all=snapshot.state.jobs;
+ const jobs=[...all].reverse().filter(job=>(!filter||(filter==='active'?['queued','downloading'].includes(job.status):job.status===filter))&&(!query||(job.title+' '+job.episode.name).toLocaleLowerCase().includes(query)));
+ $('jobSummary').textContent=jobs.length+' / '+all.length+' 项';
+ if(!jobs.length){empty(root,all.length?'没有符合筛选条件的任务':'还没有任务，搜索剧集后选择分集下载');return;}
  for(const job of jobs){
   const row=el('article',undefined,'task'),main=el('div',undefined,'task-main');
-  main.append(el('h3',job.title+' / '+job.episode.name),el('p','第 '+job.season+' 季 / 已尝试 '+job.attempts+' 次'+(job.speed?' / '+job.speed:'')));
+  const title=el('h3',job.title);title.title=job.title;
+  main.append(title,el('p',job.episode.name+' · 第 '+job.season+' 季'+(job.attempts>1?' · 尝试 '+job.attempts+' 次':''),'task-meta'));
+  const metrics=el('div',undefined,'task-metrics');
   if(job.status==='downloading'){
-   const progress=el('progress');progress.max=1;progress.value=job.progress;progress.setAttribute('aria-label','下载进度');
-   main.append(progress,el('small',Math.round(job.progress*100)+'%（当前轨道）'));
+   const merging=job.progress>=0.95&&!job.speed;
+   const line=el('div',undefined,'task-transfer');
+   line.append(el('strong',merging?'合并与校验中':job.speed||'等待响应…'),el('span',Math.round(job.progress*100)+'%'));
+   const progress=el('progress');progress.max=1;progress.value=job.progress;progress.setAttribute('aria-label',job.title+' '+job.episode.name+' 下载进度');
+   metrics.append(line,progress);
+  }else if(job.status==='completed'){
+   const size=el('strong',formatBytes(job.sizeBytes),'task-size');size.title=job.output||'已下载文件';metrics.append(size);
+  }else if(job.status==='queued'&&new Date(job.nextAttempt)>new Date()){
+   metrics.append(el('span',new Date(job.nextAttempt).toLocaleTimeString('zh-CN')+' 后重试','task-wait'));
   }
-  if(job.error)main.append(el('p',job.error,'error-text'));
-  if(job.output)main.append(el('small',job.output));
-  if(job.status==='queued'&&!job.nextAttempt.startsWith('0001')&&new Date(job.nextAttempt)>new Date())main.append(el('small','下次尝试：'+new Date(job.nextAttempt).toLocaleTimeString()));
-  const actions=el('div',undefined,'actions');
+  const actions=el('div',undefined,'actions task-actions');
   const action=(name,cmd)=>actions.append(button(name,async()=>{await api('jobs/'+encodeURIComponent(job.id)+'/'+cmd,{});await refresh();}));
   if(job.status==='completed')actions.append(button('播放',()=>playDownloaded(job)));
   if(['queued','downloading'].includes(job.status))action('暂停','pause');
-  if(['paused','failed','canceled'].includes(job.status))action('重试','resume');
+  if(['paused','failed','canceled'].includes(job.status))action(job.status==='paused'?'继续':'重试','resume');
   if(!['completed','canceled'].includes(job.status))action('取消','cancel');
   const remove=iconButton('trash','删除 '+job.title+' / '+job.episode.name,()=>openDeleteJob(job));remove.classList.add('danger-button');actions.append(remove);
-  row.append(main,el('span',labels[job.status]||job.status,'badge '+(job.status==='completed'?'good':job.status==='failed'?'bad':'')),actions);root.append(row);
+  row.append(main,metrics,el('span',labels[job.status]||job.status,'badge '+(job.status==='completed'?'good':job.status==='failed'?'bad':'')),actions);
+  if(job.error){const error=el('p',job.error,'error-text task-error');row.append(error);}
+  root.append(row);
  }
 }
 $('jobFilter').onchange=renderJobs;
+$('jobSearch').oninput=renderJobs;
 $('closeLocalPlayer').onclick=()=>localDialog.close();
 localDialog.addEventListener('close',stopLocalPlayback);
 window.addEventListener('pagehide',stopLocalPlayback);

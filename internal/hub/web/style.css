@@ -44,11 +44,20 @@ h1, h2, h3 { line-height: 1.3; }
 .nav-count { margin-left: auto; min-width: 18px; padding: 2px 5px; border-radius: 4px; color: #21383d; background: #d9ad79; text-align: center; font-size: 10px; line-height: 1.2; }
 .nav-count:empty { display: none; }
 .sidebar-bottom { margin-top: auto; padding: 12px 11px 0; border-top: 1px solid #375159; }
-.sidebar-bottom p { margin: 0 0 12px; color: #9eb1b5; font-size: 11px; line-height: 1.6; }
+/* long: 版本与发行时间常驻导航底部，更新状态紧邻操作按钮，切页后仍可找到。 */
+.release-meta { display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.release-meta strong { color: #f0f5f3; font-size: 13px; }
+.release-meta time { color: #b2c5c8; font-size: 11px; }
+.version-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.version-actions button { min-height: 32px; padding: 5px 9px; border-color: #59717a; color: #e3eeeb; background: #2e4b53; font-size: 11px; }
+.version-actions button:hover { border-color: #dca66c; color: #fff; }
+#applyUpdate { color: #20343b; background: #e5b581; border-color: #e5b581; }
+.sidebar-bottom .update-message { margin: 8px 0 0; color: #bfd2d4; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.sidebar-bottom .update-error { color: #ffc7bd; }
 
 /* long: 五个菜单共用工作区宽度，让内容随浏览器窗口铺满侧栏以外的空间。 */
 .workspace { margin-left: 204px; min-width: 0; padding: 22px 36px 64px; }
-.notice { margin: 0 0 16px; padding: 9px 12px; border-left: 3px solid var(--accent); border-radius: 3px; color: #295d68; background: #e6f0f0; font-size: 12px; }
+.notice { margin: 0 0 16px; padding: 9px 12px; border: 1px solid var(--accent); border-radius: 3px; color: #295d68; background: #e6f0f0; font-size: 12px; }
 .notice.error { border-color: var(--bad); color: #973d39; background: #fcebea; }
 .page { min-width: 0; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
@@ -97,12 +106,30 @@ h1, h2, h3 { line-height: 1.3; }
 .pagination span { color: var(--muted); font-size: 12px; }
 
 .stack-list { display: grid; gap: 8px; }
-.task, .follow-row { display: flex; align-items: center; gap: 16px; min-width: 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.follow-row { display: flex; align-items: center; gap: 16px; min-width: 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .task-main, .follow-main { flex: 1; min-width: 0; }
 .task h3, .follow-row h3 { margin: 0 0 4px; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .task p, .follow-row p { margin: 2px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.task small { display: block; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.task progress { display: block; width: min(100%, 340px); height: 6px; margin: 8px 0 5px; accent-color: var(--accent); }
+/* long: 筛选固定在工作区顶端，紧凑任务按身份、传输状态、操作排列，完整输出路径收进大小提示。 */
+.jobs-toolbar { position: sticky; top: 0; z-index: 2; min-height: 56px; padding: 10px 0; margin: -10px 0 0; border-bottom: 1px solid var(--line); background: #f2f5f4; }
+.jobs-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+#jobSummary { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.job-filters { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.job-filters input { width: 180px; }
+.job-filters input, .job-filters select { height: 34px; padding: 5px 9px; font-size: 12px; }
+.job-list { background: var(--surface); }
+.task { display: grid; grid-template-columns: minmax(0, 1fr) 200px 70px 154px; align-items: center; gap: 4px 16px; min-width: 0; min-height: 60px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.task h3 { margin: 0; font-size: 13px; }
+.task .task-meta { margin: 3px 0 0; font-size: 11px; }
+.task-metrics { min-width: 0; text-align: right; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.task-transfer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task-transfer strong, .task-size { font-size: 12px; font-weight: 600; }
+.task progress { display: block; width: 100%; height: 4px; margin: 6px 0 0; accent-color: var(--accent); }
+.task > .badge { justify-self: end; }
+.task-actions { flex-wrap: nowrap; gap: 4px; }
+.task-actions button { min-height: 32px; padding: 5px 8px; }
+.task-actions .icon-button { width: 32px; height: 32px; padding: 6px; }
+.task .task-error { grid-column: 1 / -1; margin: 0; padding-top: 2px; font-size: 11px; }
 .inline-field { display: flex; flex-direction: row; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .inline-field select { min-width: 125px; }
 
@@ -124,6 +151,11 @@ h1, h2, h3 { line-height: 1.3; }
 .source-metrics { display: flex; align-items: center; gap: 7px; }
 .source-default { color: #97612e; }
 .source-latency { color: var(--muted); text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+.source-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.source-row .is-default { color: #94602f; background: #fff5e6; border-color: #d9bd98; opacity: 1; }
+.source-row .is-default svg { fill: #f1cf98; }
+.source-heading { min-width: 0; }
+.source-heading .source-summary { margin-top: 4px; }
 .source-row .is-on { color: var(--good); background: #eaf4ee; border-color: #c8dfd2; }
 
 .settings-form { display: grid; gap: 12px; }
@@ -193,15 +225,21 @@ dialog::backdrop { background: #132a31a8; }
 @media (max-width: 1000px) {
   .workspace { padding: 24px 24px 55px; }
   .source-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .task, .follow-row { flex-wrap: wrap; }
-  .task-main, .follow-main { flex-basis: calc(100% - 110px); }
+  .follow-row { flex-wrap: wrap; }
+  .task { grid-template-columns: minmax(0, 1fr) 150px 65px 145px; gap: 4px 10px; }
+  .follow-main { flex-basis: calc(100% - 110px); }
 }
 @media (max-width: 700px) {
   .sidebar { position: static; width: 100%; padding: 11px 14px 9px; }
   .brand { padding: 0 0 9px; font-size: 20px; }
   .brand-mark { width: 25px; height: 25px; font-size: 18px; }
-  .brand small, .sidebar-bottom p { display: none; }
-  .sidebar-bottom { position: absolute; top: 12px; right: 14px; margin: 0; padding: 0; border: 0; }
+  .brand small { display: none; }
+  .sidebar-bottom { position: static; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 8px 0 0; padding: 8px 0 0; }
+  .release-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  .release-meta strong { font-size: 11px; }
+  .release-meta time { font-size: 11px; }
+  .version-actions { margin: 0 0 0 auto; }
+  .sidebar-bottom .update-message { flex-basis: 100%; margin: 0; }
   .sidebar nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
   .sidebar nav a { position: relative; justify-content: center; min-width: 0; min-height: 33px; gap: 0; padding: 7px 1px; border-left: 0; border-bottom: 2px solid transparent; font-size: 11px; white-space: nowrap; }
   .sidebar nav a.selected { border-bottom-color: var(--warm); }
@@ -213,13 +251,26 @@ dialog::backdrop { background: #132a31a8; }
   .searchbar select { flex: 1; width: auto; }
   .posters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 11px; }
   .section-head { align-items: flex-start; flex-wrap: wrap; }
-  .source-toolbar { flex-wrap: wrap; }
-  .source-toolbar { flex-wrap: nowrap; align-items: center; }
+  .source-toolbar { flex-wrap: nowrap; align-items: flex-start; gap: 8px; }
   .source-toolbar .actions { flex: none; }
   .source-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .source-row { padding: 11px 12px; }
-  .task, .follow-row { gap: 10px; padding: 12px; }
-  .task-main, .follow-main { flex-basis: 100%; }
+  .follow-row { gap: 10px; padding: 12px; }
+  .follow-main { flex-basis: 100%; }
+  .jobs-toolbar { align-items: center; gap: 8px; padding: 10px 0; }
+  .job-filters { width: 100%; }
+  .job-filters input { flex: 1; min-width: 0; width: 0; }
+  .job-filters .inline-field { flex: none; }
+  .task { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px; }
+  .task-main { grid-row: 1; grid-column: 1; }
+  .task > .badge { grid-row: 1; grid-column: 2; }
+  .task-metrics { grid-row: 2; grid-column: 1; text-align: left; }
+  .task-transfer { max-width: 220px; }
+  .task-actions { grid-row: 2; grid-column: 2; }
+  .task-metrics:empty { display: none; }
+  .task progress { max-width: 220px; }
+  .source-row { gap: 8px; }
+  .source-metrics { gap: 4px; }
   .fields { grid-template-columns: 1fr; }
   .fields .wide { grid-column: auto; }
   .settings-block { padding: 15px; }
@@ -236,3 +287,5 @@ dialog::backdrop { background: #132a31a8; }
   .local-player-dialog, .delete-job-dialog { max-width: calc(100vw - 16px); padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; } }
+
+@media (pointer: coarse) { .version-actions button, .task-actions button, .source-actions button { min-height: 44px; min-width: 44px; } }

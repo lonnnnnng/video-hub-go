@@ -29,7 +29,28 @@ cd /home/lee/video-hub-go
 
 除 `logs -f` 外，命令不接受额外参数。`status`、`start`、`stop`、`restart` 调用 `systemctl --user`；`logs` 调用 `journalctl --user`。
 
-## 在线升级
+## 网页更新
+
+管理台导航底部常驻当前版本、发行时间（北京时间）和 **检测更新** 按钮：
+
+1. 点击检测，查询公开仓库的最新正式 Release。
+2. 有新版时点击 **更新 v…**，确认后开始下载、SHA256 校验与原子替换。
+3. 独立 systemd 更新任务重启主服务，并核对健康接口的目标版本。页面自动重连，成功后刷新以加载新界面。
+4. 新版启动失败时尝试恢复旧程序并重启，页面显示更新或回滚结果；正在下载的任务在服务启动后重新排队。
+
+网页更新使用 Go 内置升级器，无需 Python。支持 Linux `amd64`、`arm64`，需要 `systemctl`、`systemd-run`，且被管理 unit 的主进程必须是当前程序。默认管理 `video-hub-go.service` 用户服务，程序所在目录必须可写，unit 的 `ExecStart` 必须包含 `--listen`。发行时间未注入时读取当前标签的 GitHub Release 时间；读取失败会显示“发行时间待获取”，可再次检测重试。
+
+自定义 unit 时，把 `MOVIEHUB_SERVICE_NAME`（不带 `.service`）和 `MOVIEHUB_SYSTEMD_SCOPE`（`user` 或 `system`）设置在 **服务进程的 systemd 环境中**。在终端为管理脚本设置这些变量不会改变已运行的网页服务。网页更新直接定位当前可执行文件及 unit 监听地址，不使用脚本的 `MOVIEHUB_BINARY` 或 `MOVIEHUB_HEALTH_URL`。系统级服务仅在程序以 root 运行时支持网页更新；普通用户运行的系统服务使用脚本由有权限的用户升级。
+
+进度保存在 `data/web-update.json`，`web-update.json.lock` 用于独立更新任务加锁。旧二进制备份保留在程序旁的 `.previous-时间戳` 文件中。更新任务日志可查看：
+
+```bash
+journalctl --user -u video-hub-go-web-update.service -n 100
+```
+
+自定义 unit 名时同步修改上述日志 unit。更新遵循服务器自身网络；检测成功后超过 30 分钟再安装，需要重新检测。升级前备份数据与媒体，失败时结合页面信息和日志检查，勿在更新期间手动替换程序。
+
+## 脚本在线升级
 
 ```bash
 cd /home/lee/video-hub-go

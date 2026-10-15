@@ -27,15 +27,15 @@ Go 服务内置网页管理台与 HLS 下载器，部署时无需单独运行下
 
 | 能力 | 使用体验 |
 | --- | --- |
-| 资源站管理 | 自动导入站源清单，一键检测连通性与搜索能力，检测失败的站源自动禁用，按延迟排序并选择默认源。 |
+| 资源站管理 | 自动导入站源清单，一键检测连通性与搜索能力，失败自动禁用、按延迟排序；也可手动选择已启用的默认站源。 |
 | 找剧与搜索 | 首页展示默认站源的分类和片单，支持翻页；可选择站源搜索，查看剧集详情与分集。 |
 | 在线预览 | 详情弹框内播放 HLS，支持上一集、下一集；浏览器直接访问站源媒体地址。 |
 | 自动追更 | 定时检查新集，可开启自动下载，也可在添加追更时回补已有分集。 |
 | 并发下载 | 同时下载多集，每集并发获取 HLS 分片，经 FFmpeg 封装为 MP4，再由 FFprobe 校验。 |
-| 队列管理 | 查看进度与错误，暂停、继续、取消或重试；支持仅删除任务，或连同本集文件一起删除。 |
+| 队列管理 | 紧凑任务列表与固定筛选栏，按剧名、分集和状态筛选；下载中显示速度，完成后显示文件大小。支持暂停、继续、取消、重试和删除任务或文件。 |
 | 本地播放 | 已完成任务通过 HTTP 播放本地 MP4，支持 Range 请求和拖动进度，无需转码。 |
 | Emby 入库 | 自动整理剧集与季度目录、生成 NFO，文件发布完成后通知 Emby 扫描，失败保留待办重试。 |
-| 轻量运维 | 分类 JSON 存储、原子写入、关键事件日志、systemd 管理及带 SHA256 校验的在线升级。 |
+| 轻量运维 | 分类 JSON 存储、原子写入、关键事件日志、systemd 管理；导航底部显示版本与发行时间，可检测并安装新版。 |
 
 ## 快速开始
 
@@ -45,17 +45,17 @@ Go 服务内置网页管理台与 HLS 下载器，部署时无需单独运行下
 | --- | --- |
 | Linux Release | Linux `amd64` 或 `arm64`，FFmpeg、FFprobe；无需安装 Go。 |
 | 从源码运行 | Go **1.25+**，FFmpeg、FFprobe；可在 macOS、Linux 使用。 |
-| 后台服务与在线升级 | Linux、systemd、Bash、Python 3，以及访问 GitHub Release 的网络。 |
+| 后台服务与在线升级 | Linux、systemd，以及访问 GitHub Release 的网络；管理脚本另需 Bash，脚本升级另需 Python 3。 |
 | 网页管理台 | 现代浏览器；在线预览还需要浏览器能够访问资源站的媒体域名。 |
 
 运行服务的用户需要读写数据目录与媒体目录。首次使用前，可通过 `ffmpeg -version` 和 `ffprobe -version` 确认工具可用。
 
 ### 方式一：使用 Linux Release
 
-以下命令在 **Linux 服务器**执行，示例安装 v0.3.0。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
+以下命令在 **Linux 服务器**执行，示例安装 v0.4.0。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
 
 ```bash
-version=v0.3.0
+version=v0.4.0
 git clone --depth 1 --branch "$version" https://github.com/lonnnnnng/video-hub-go.git
 cd video-hub-go
 
@@ -190,6 +190,10 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 
 ## 服务管理与在线升级
 
+管理台导航底部显示当前版本与发行时间（北京时间）。点击 **检测更新** 查询 GitHub 最新正式 Release；发现新版后点击 **更新** 并确认。更新期间页面显示进度，服务重启后自动重新连接并刷新页面。开发版本显示“尚未发行”，不执行正式版升级。
+
+网页更新支持 Linux `amd64`、`arm64` 的 systemd 用户服务，默认服务名为 `video-hub-go`，程序目录须可写，unit 启动参数须包含 `--listen`。不满足条件时会显示原因；系统服务由非 root 用户运行的部署请使用下方管理脚本升级。自定义服务名等配置见 [服务管理说明](docs/service-management.md#网页更新)。
+
 以下命令适用于默认名为 `video-hub-go` 的 **systemd 用户服务**，以服务所属用户在安装目录执行：
 
 ```bash
@@ -211,7 +215,7 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 健康检查入口为 `GET /healthz`，例如：
 
 ```json
-{"status":"ok","version":"v0.3.0"}
+{"status":"ok","version":"v0.4.0"}
 ```
 
 服务关键事件输出到标准错误流，systemd 部署通过 journal 查看，包括站源检测、追更、下载、合并、入库和 Emby 通知。HTTP 日志不记录搜索词、播放 URL、请求头、请求体或 API Key。
@@ -227,6 +231,7 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 | `data/follows.json` | 追更记录与已知分集。 |
 | `data/jobs.json` | 下载队列、状态和输出位置。 |
 | `data/emby.json` | Emby 待扫描与通知状态。 |
+| `data/web-update.json` | 网页更新版本、进度与结果记录，首次执行更新时生成；旁边的 `.lock` 防止重复执行更新。 |
 
 状态以同目录临时文件、`fsync`、原子重命名及目录同步提交，跨文件更新通过事务记录恢复；文件锁阻止多个实例同时写入一个数据目录。
 
@@ -306,9 +311,11 @@ go vet ./...
 生成 Linux 双架构发布程序，并注入版本号：
 
 ```bash
-MOVIEHUB_VERSION=v0.3.0 ./scripts/build-linux.sh
+MOVIEHUB_VERSION=v0.4.0 ./scripts/build-linux.sh
 ```
 
 产物位于 `dist/`：`moviehub-linux-amd64`、`moviehub-linux-arm64`、`SHA256SUMS`。普通源码构建的健康版本默认为 `dev`。
+
+发行时间默认读取对应 GitHub Release 的 `published_at`。若构建时已知真实发行时间，可通过 `MOVIEHUB_RELEASE_TIME` 注入 RFC 3339 时间；构建时间不会作为发行时间展示。
 
 内置 HLS.js 1.7.3，采用 Apache 2.0 许可证；上游版权与许可文本见 [hls.LICENSE.txt](internal/hub/web/hls.LICENSE.txt)。

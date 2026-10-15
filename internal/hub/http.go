@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -125,6 +126,49 @@ func (s *Service) Handler() http.Handler {
 			}
 		})
 	}
+	api("GET /api/update", func(w http.ResponseWriter, r *http.Request) error {
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+		info, err := s.updates.info(ctx, false)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, 200, info)
+		return nil
+	})
+	api("POST /api/update/check", func(w http.ResponseWriter, r *http.Request) error {
+		var input struct{}
+		if err := decode(w, r, &input); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		defer cancel()
+		info, err := s.updates.info(ctx, true)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, 200, info)
+		return nil
+	})
+	api("POST /api/update/apply", func(w http.ResponseWriter, r *http.Request) error {
+		// long: 网页升级会替换程序并重启服务，只接收明确同源的 JSON 请求。
+		if r.Header.Get("Origin") == "" {
+			return errors.New("请从管理页面发起更新")
+		}
+		var input struct {
+			Version string `json:"version"`
+		}
+		if err := decode(w, r, &input); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+		if err := s.updates.start(ctx, input.Version); err != nil {
+			return err
+		}
+		writeJSON(w, 202, map[string]bool{"updating": true})
+		return nil
+	})
 	api("GET /api/state", func(w http.ResponseWriter, r *http.Request) error {
 		st := s.Store.Snapshot()
 		tools := map[string]bool{}
@@ -211,6 +255,36 @@ func (s *Service) Handler() http.Handler {
 		})
 		if e != nil {
 			return e
+		}
+		writeJSON(w, 200, map[string]bool{"saved": true})
+		return nil
+	})
+	api("POST /api/sources/{id}/default", func(w http.ResponseWriter, r *http.Request) error {
+		var input struct{}
+		if err := decode(w, r, &input); err != nil {
+			return err
+		}
+		if err := s.Store.Update(func(st *State) error {
+			selected := -1
+			for i, source := range st.Sources {
+				if source.ID == r.PathValue("id") {
+					selected = i
+					break
+				}
+			}
+			if selected < 0 {
+				return errors.New("站源不存在")
+			}
+			if !st.Sources[selected].Enabled {
+				return errors.New("请先启用站源，再设为默认")
+			}
+			// long: 手动默认只改变首页来源，保留原延迟排序；下次一键检测仍会重新推荐最快站源。
+			for i := range st.Sources {
+				st.Sources[i].Default = i == selected
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 		writeJSON(w, 200, map[string]bool{"saved": true})
 		return nil

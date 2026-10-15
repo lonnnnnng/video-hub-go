@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#20343b">
   <title>首页 · 片库</title>
   <link rel="stylesheet" href="/style.css">
-  <script src="/hls.min.js" defer></script><script src="/app.js" defer></script><script src="/detail.js" defer></script>
+  <script src="/hls.min.js" defer></script><script src="/app.js" defer></script><script src="/update.js" defer></script><script src="/detail.js" defer></script>
 </head>
 <body data-page="search">
   <aside class="sidebar">
@@ -18,7 +18,7 @@
       <a href="/sources.html"><span aria-hidden="true">◈</span>资源站</a>
       <a href="/settings.html"><span aria-hidden="true">⚙</span>服务设置</a>
     </nav>
-    <div class="sidebar-bottom"><p>让喜欢的剧集<br>有一个自己的片库。</p></div>
+    <div class="sidebar-bottom"><div class="release-meta"><strong id="currentVersion">读取版本…</strong><time id="releaseTime">发行时间待获取</time></div><div class="version-actions"><button id="checkUpdate" type="button">检测更新</button><button id="applyUpdate" type="button" hidden>更新</button></div><p id="updateStatus" class="update-message" role="status" hidden></p></div>
   </aside>
   <main class="workspace">
     <p id="notice" class="notice" role="status" hidden></p>

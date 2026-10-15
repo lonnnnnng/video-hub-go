@@ -26,7 +26,11 @@ func run() error {
 	listen := flag.String("listen", "127.0.0.1:4444", "HTTP 监听地址")
 	data := flag.String("data-dir", "./data", "JSON 状态目录")
 	media := flag.String("media-dir", "./media", "首次启动的媒体目录")
+	updateWorker := flag.String("update-worker", "", "执行独立更新任务")
 	flag.Parse()
+	if *updateWorker != "" {
+		return hub.RunUpdateWorker(*updateWorker)
+	}
 	abs, err := filepath.Abs(*media)
 	if err != nil {
 		return err

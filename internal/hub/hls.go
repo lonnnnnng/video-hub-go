@@ -34,6 +34,7 @@ type hlsPart struct {
 type hlsFetcher struct {
 	client  *http.Client
 	headers map[string]string
+	onBytes func(int)
 }
 
 func newHLSFetcher(headers map[string]string) *hlsFetcher {
@@ -88,7 +89,11 @@ func (f *hlsFetcher) get(ctx context.Context, address string, start, length int6
 					last = errors.New("HLS 分片服务器返回错误的字节范围")
 					return
 				}
-				body, last = io.ReadAll(io.LimitReader(resp.Body, limit+1))
+				var reader io.Reader = resp.Body
+				if f.onBytes != nil {
+					reader = &hlsCountingReader{Reader: reader, count: f.onBytes}
+				}
+				body, last = io.ReadAll(io.LimitReader(reader, limit+1))
 				if last == nil && int64(len(body)) > limit {
 					last = errors.New("HLS 资源超过大小限制")
 				}
@@ -379,7 +384,29 @@ func decryptHLS(data, key, iv []byte) ([]byte, error) {
 	return plain[:len(plain)-padding], nil
 }
 
-func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir string, threads int, progress func(float64)) error {
+// long: 在读取响应体时计数，大分片尚未接收完也能显示速度；重试产生的真实流量同样计入。
+type hlsCountingReader struct {
+	io.Reader
+	count func(int)
+}
+
+func (r *hlsCountingReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if n > 0 {
+		r.count(n)
+	}
+	return n, err
+}
+func formatDownloadSpeed(value float64) string {
+	units := []string{"B/s", "KB/s", "MB/s", "GB/s"}
+	i := 0
+	for value >= 1024 && i < len(units)-1 {
+		value /= 1024
+		i++
+	}
+	return fmt.Sprintf("%.1f %s", value, units[i])
+}
+func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir string, threads int, progress func(float64, string)) error {
 	if threads < 1 {
 		threads = 1
 	}
@@ -390,17 +417,17 @@ func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir stri
 	defer cancel()
 	queue := make(chan hlsPart)
 	results := make(chan error, threads)
-	var done atomic.Int64
+	var done, received atomic.Int64
+	// long: fetcher 可用于多个并行任务，计数回调仅绑定本次分片下载副本，避免不同剧集串速度。
+	tracked := *f
+	tracked.onBytes = func(n int) { received.Add(int64(n)) }
 	var wg sync.WaitGroup
-	var progressMu sync.Mutex
-	lastProgress := time.Now()
-	var reported int64
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for part := range queue {
-				data, _, err := f.get(ctx, part.url, part.start, part.length, 128<<20)
+				data, _, err := tracked.get(ctx, part.url, part.start, part.length, 128<<20)
 				if err == nil && len(part.key) > 0 {
 					data, err = decryptHLS(data, part.key, part.iv)
 				}
@@ -415,17 +442,7 @@ func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir stri
 					cancel()
 					return
 				}
-				count := done.Add(1)
-				if progress != nil {
-					// long: 状态保存在原子写入的 JSON 文件中，按时间节流避免海量分片反复刷盘。
-					progressMu.Lock()
-					if count > reported && (time.Since(lastProgress) >= 2*time.Second || count == int64(len(parts))) {
-						progress(float64(count) / float64(len(parts)) * 0.95)
-						lastProgress = time.Now()
-						reported = count
-					}
-					progressMu.Unlock()
-				}
+				done.Add(1)
 			}
 		}()
 	}
@@ -439,20 +456,42 @@ func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir stri
 			}
 		}
 	}()
-	wg.Wait()
-	select {
-	case err := <-results:
-		return fmt.Errorf("HLS 分片下载失败: %w", err)
-	default:
+	finished := make(chan struct{})
+	go func() { wg.Wait(); close(finished) }()
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	lastTime, lastBytes := time.Now(), int64(0)
+	report := func() {
+		if progress == nil || len(parts) == 0 {
+			return
+		}
+		now, total := time.Now(), received.Load()
+		speed := float64(total-lastBytes) / now.Sub(lastTime).Seconds()
+		progress(float64(done.Load())/float64(len(parts))*0.95, formatDownloadSpeed(speed))
+		lastTime, lastBytes = now, total
 	}
-	return ctx.Err()
+	// long: 按时间节流落盘，同时覆盖长分片接收和无流量等待，避免沿用失真的历史速度。
+	for {
+		select {
+		case <-ticker.C:
+			report()
+		case <-finished:
+			report()
+			select {
+			case err := <-results:
+				return fmt.Errorf("HLS 分片下载失败: %w", err)
+			default:
+			}
+			return ctx.Err()
+		}
+	}
 }
 
-func downloadHLS(ctx context.Context, address string, headers map[string]string, staging, output, ffmpeg string, threads int, progress func(float64)) error {
+func downloadHLS(ctx context.Context, address string, headers map[string]string, staging, output, ffmpeg string, threads int, progress func(float64, string)) error {
 	return downloadHLSWithFetcher(ctx, newHLSFetcher(headers), address, staging, output, ffmpeg, threads, progress)
 }
 
-func downloadHLSWithFetcher(ctx context.Context, f *hlsFetcher, address, staging, output, ffmpeg string, threads int, progress func(float64)) error {
+func downloadHLSWithFetcher(ctx context.Context, f *hlsFetcher, address, staging, output, ffmpeg string, threads int, progress func(float64, string)) error {
 	started := time.Now()
 	raw, base, err := resolveHLS(ctx, f, address)
 	if err != nil {
@@ -467,6 +506,9 @@ func downloadHLSWithFetcher(ctx context.Context, f *hlsFetcher, address, staging
 	// long: 并发只影响取回顺序，片单仍按原媒体顺序引用本地文件，避免画面和声音乱序。
 	if err = fetchHLSParts(ctx, f, parts, staging, threads, progress); err != nil {
 		return err
+	}
+	if progress != nil {
+		progress(0.95, "")
 	}
 	slog.Info("HLS 分片已取回", "parts", len(parts), "duration_ms", time.Since(started).Milliseconds())
 	playlistPath := filepath.Join(staging, "local.m3u8")
@@ -483,7 +525,7 @@ func downloadHLSWithFetcher(ctx context.Context, f *hlsFetcher, address, staging
 		return fmt.Errorf("FFmpeg 合并 MP4 失败: %s", strings.TrimSpace(stderr.String()))
 	}
 	if progress != nil {
-		progress(1)
+		progress(1, "")
 	}
 	slog.Info("FFmpeg 封装完成", "parts", len(parts), "duration_ms", time.Since(started).Milliseconds())
 	return nil

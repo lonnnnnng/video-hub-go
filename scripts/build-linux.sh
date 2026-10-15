@@ -4,12 +4,13 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist_dir="${MOVIEHUB_DIST_DIR:-${project_root}/dist}"
 version="${MOVIEHUB_VERSION:-dev}"
+release_time="${MOVIEHUB_RELEASE_TIME:-}"
 mkdir -p "$dist_dir"
 
 # long: 一次生成两种常见 Linux 架构的静态程序，部署机无需 Go 工具链或 CGO 运行库。
 for arch in amd64 arm64; do
   output="${dist_dir}/moviehub-linux-${arch}"
-  CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go -C "$project_root" build -trimpath -ldflags "-X movie-hub-go/internal/hub.Version=${version}" -o "$output" ./cmd/moviehub
+  CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go -C "$project_root" build -trimpath -ldflags "-X movie-hub-go/internal/hub.Version=${version} -X movie-hub-go/internal/hub.ReleaseTime=${release_time}" -o "$output" ./cmd/moviehub
   printf '已构建：%s\n' "$output"
 done
 

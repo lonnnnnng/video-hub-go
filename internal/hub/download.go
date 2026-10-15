@@ -223,8 +223,8 @@ func (s *Service) runJob(ctx context.Context, j Job) {
 	selected := filepath.Join(staging, "media.mp4")
 	// long: HLS 网络下载留在本服务进程；FFmpeg 只读取本次任务的本地片单并封装 MP4。
 	slog.Info("HLS 下载与封装开始", "job_id", j.ID, "threads", cfg.Threads)
-	e = downloadHLS(attemptCtx, ep.URL, src.Headers, staging, selected, cfg.FFmpeg, cfg.Threads, func(p float64) {
-		s.progress(j.ID, p, "")
+	e = downloadHLS(attemptCtx, ep.URL, src.Headers, staging, selected, cfg.FFmpeg, cfg.Threads, func(p float64, speed string) {
+		s.progress(j.ID, p, speed)
 	})
 	if e != nil {
 		slog.Warn("HLS 下载与封装失败", "job_id", j.ID, "duration_ms", time.Since(started).Milliseconds())
@@ -289,11 +289,16 @@ func (s *Service) publish(ctx context.Context, j Job, from string, cfg Settings)
 	if e := writeNFO(j); e != nil {
 		return e
 	}
+	info, err := os.Stat(dest)
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("无法读取已发布媒体的文件大小")
+	}
 	e := s.Store.Update(func(st *State) error {
 		for i := range st.Jobs {
 			if st.Jobs[i].ID == j.ID {
 				st.Jobs[i].Status = "completed"
 				st.Jobs[i].Output = dest
+				st.Jobs[i].SizeBytes = info.Size()
 				st.Jobs[i].Progress = 1
 				st.Jobs[i].Speed = ""
 				st.Jobs[i].Error = ""
