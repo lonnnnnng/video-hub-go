@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -106,11 +105,13 @@ func validSettings(c *Settings) error {
 	}
 	return nil
 }
-func (s *Service) Handler(token string) http.Handler {
+func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	files, _ := fs.Sub(webFiles, "web")
 	mux.Handle("/", http.FileServer(http.FS(files)))
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]string{"status": "ok", "version": Version})
+	})
 	api := func(pattern string, handler func(http.ResponseWriter, *http.Request) error) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			tracked := &apiResponseWriter{ResponseWriter: w}
@@ -342,21 +343,17 @@ func (s *Service) Handler(token string) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: http: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
-		// long: 本机免口令模式还要限制 Host，避免恶意网页通过 DNS 重绑定读取收藏及服务器凭据。
+		// long: 局域网免令牌模式只接受 IP 或 localhost，避免恶意域名通过 DNS 重绑定读取片库设置。
 		host := r.Host
-		if h, _, e := net.SplitHostPort(host); e == nil {
-			host = h
+		if value, _, err := net.SplitHostPort(host); err == nil {
+			host = value
 		}
-		ip := net.ParseIP(host)
-		if token == "" && host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			writeJSON(w, 403, map[string]string{"error": "本机模式拒绝此 Host"})
+		if host != "localhost" && net.ParseIP(host) == nil {
+			writeJSON(w, 403, map[string]string{"error": "请使用服务器 IP 访问"})
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			if token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
-				writeJSON(w, 401, map[string]string{"error": "请输入访问令牌"})
-				return
-			}
+			// long: 局域网免令牌访问仍校验 Origin，阻止其他网页借浏览器发起跨站管理请求。
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, e := url.Parse(origin)
 				if e != nil || u.Host != r.Host || (u.Scheme != "http" && u.Scheme != "https") {

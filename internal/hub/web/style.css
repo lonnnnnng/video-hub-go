@@ -45,8 +45,6 @@ h1, h2, h3 { line-height: 1.3; }
 .nav-count:empty { display: none; }
 .sidebar-bottom { margin-top: auto; padding: 12px 11px 0; border-top: 1px solid #375159; }
 .sidebar-bottom p { margin: 0 0 12px; color: #9eb1b5; font-size: 11px; line-height: 1.6; }
-.sidebar-bottom button { width: 100%; padding: 7px 10px; border-color: #4e6870; color: #d8e4e2; background: transparent; text-align: left; font-size: 12px; }
-.sidebar-bottom button:hover { border-color: var(--warm); color: white; }
 
 /* long: 五个菜单共用工作区宽度，让内容随浏览器窗口铺满侧栏以外的空间。 */
 .workspace { margin-left: 204px; min-width: 0; padding: 22px 36px 64px; }
@@ -132,7 +130,7 @@ h1, h2, h3 { line-height: 1.3; }
 .block-heading h2 { margin: 0; font-size: 16px; }
 .block-heading p { margin: 0; color: var(--muted); font-size: 12px; }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 15px; margin: 11px 0 14px; }
-.fields label, .access-dialog label { display: flex; flex-direction: column; gap: 5px; color: #50656b; font-size: 12px; font-weight: 600; }
+.fields label { display: flex; flex-direction: column; gap: 5px; color: #50656b; font-size: 12px; font-weight: 600; }
 .fields input { width: 100%; }
 .fields .wide { grid-column: 1 / -1; }
 .check { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; color: #445c62; font-size: 12px; cursor: pointer; }
@@ -158,10 +156,6 @@ dialog::backdrop { background: #132a31a8; }
 .episode:has(input:checked) { border-color: #8bb5b8; background: #e9f2f2; }
 .detail-footer { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
 .detail-checks { display: grid; gap: 9px; }
-.access-dialog { width: 410px; }
-.access-dialog h2 { margin: 0 0 5px; font-size: 18px; }
-.access-dialog p { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
-.access-dialog .actions { margin-top: 15px; }
 
 @media (max-width: 1750px) { .posters { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 @media (max-width: 1450px) { .posters { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
@@ -178,7 +172,6 @@ dialog::backdrop { background: #132a31a8; }
   .brand-mark { width: 25px; height: 25px; font-size: 18px; }
   .brand small, .sidebar-bottom p { display: none; }
   .sidebar-bottom { position: absolute; top: 12px; right: 14px; margin: 0; padding: 0; border: 0; }
-  .sidebar-bottom button { width: auto; padding: 5px 8px; font-size: 11px; }
   .sidebar nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
   .sidebar nav a { position: relative; justify-content: center; min-width: 0; min-height: 33px; gap: 0; padding: 7px 1px; border-left: 0; border-bottom: 2px solid transparent; font-size: 11px; white-space: nowrap; }
   .sidebar nav a.selected { border-bottom-color: var(--warm); }

@@ -12,12 +12,11 @@ let homeCache, searchCache;
 const labels = {queued:'等待下载',downloading:'下载中',paused:'已暂停',canceled:'已取消',failed:'下载失败',completed:'已入库'};
 function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'error' : ''; $('notice').hidden = false; }
 async function api(path, body) {
- const headers = {'Authorization':'Bearer ' + (sessionStorage.getItem('moviehubToken') || '')};
+ const headers = {};
  const options = {headers};
  if (body !== undefined) { options.method = 'POST'; headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
  const response = await fetch('/api/' + path, options);
  const result = await response.json();
- if (response.status === 401 && !$('accessDialog').open) $('accessDialog').showModal();
  if (!response.ok) throw new Error(result.error || '操作失败，请稍后重试');
  return result;
 }
@@ -26,9 +25,6 @@ function button(text, action) { const b = el('button',text); b.type = 'button'; 
 function navigate(path, message) { if (message) sessionStorage.setItem('moviehubNotice', message); window.location.href = path; }
 const flash = sessionStorage.getItem('moviehubNotice');
 if (flash) { sessionStorage.removeItem('moviehubNotice'); notice(flash); }
-$('access').onclick = () => $('accessDialog').showModal();
-$('closeAccess').onclick = () => $('accessDialog').close();
-$('accessForm').onsubmit = e => { e.preventDefault(); sessionStorage.setItem('moviehubToken',$('token').value); $('token').value = ''; $('accessDialog').close(); settingsLoaded = false; refresh(); };
 if ($('closeDetail')) $('closeDetail').onclick = () => $('detailDialog').close();
 function empty(target,text) { target.replaceChildren(el('div',text,'empty')); }
 function updateSources() {const select = $('searchSource'), selected = select.value, defaultID = snapshot.state.sources.find(s => s.enabled && s.default)?.id || ''; select.replaceChildren(new Option('全部已启用资源站','')); snapshot.state.sources.filter(s => s.enabled).forEach(s => select.add(new Option(s.name,s.id))); if (!sourceSelectionInitialized || selected === previousDefaultID || (selected && !snapshot.state.sources.some(s => s.enabled && s.id === selected))) select.value = defaultID; else select.value = selected; sourceSelectionInitialized = true; previousDefaultID = defaultID; return defaultID;}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"log/slog"
 	"movie-hub-go/internal/hub"
@@ -28,18 +27,6 @@ func run() error {
 	data := flag.String("data-dir", "./data", "JSON 状态目录")
 	media := flag.String("media-dir", "./media", "首次启动的媒体目录")
 	flag.Parse()
-	host, _, err := net.SplitHostPort(*listen)
-	if err != nil {
-		return errors.New("监听地址格式无效")
-	}
-	token := os.Getenv("MOVIEHUB_TOKEN")
-	ip := net.ParseIP(host)
-	if host != "localhost" && (ip == nil || !ip.IsLoopback()) && len(token) < 24 {
-		return errors.New("非本机监听需要至少 24 字符的 MOVIEHUB_TOKEN")
-	}
-	if token != "" && len(token) < 24 {
-		return errors.New("MOVIEHUB_TOKEN 至少需要 24 字符")
-	}
 	abs, err := filepath.Abs(*media)
 	if err != nil {
 		return err
@@ -65,7 +52,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: service.Handler(token), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 5 * time.Minute, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Handler: service.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 5 * time.Minute, IdleTimeout: 60 * time.Second}
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(done)
@@ -78,7 +65,7 @@ func run() error {
 			slog.Error("HTTP 服务关闭失败", "error", err)
 		}
 	}()
-	// long: 启动日志只记录监听和目录，不输出访问令牌或 JSON 状态内容。
+	// long: 启动日志只记录监听和目录，不输出 JSON 状态内容。
 	slog.Info("Movie Hub Go 已启动", "listen", listener.Addr().String(), "data_dir", *data, "media_dir", abs)
 	if err = server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		// long: 监听或服务异常必须返回失败状态，systemd 才能按 Restart=on-failure 拉起服务。

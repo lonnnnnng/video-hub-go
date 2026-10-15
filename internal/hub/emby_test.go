@@ -107,7 +107,7 @@ func TestSettingsChangeSchedulesScan(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "http://localhost/api/settings", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
-	service.Handler("").ServeHTTP(response, req)
+	service.Handler().ServeHTTP(response, req)
 	if response.Code != http.StatusOK {
 		t.Fatalf("保存 Emby 设置失败: %d %s", response.Code, response.Body.String())
 	}

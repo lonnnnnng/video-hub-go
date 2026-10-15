@@ -30,7 +30,9 @@ Linux 部署可用 [`scripts/build-linux.sh`](scripts/build-linux.sh) 构建 `am
 
 管理台按菜单使用独立页面：首页 `/`、追更 `/follows.html`、下载 `/jobs.html`、资源站 `/sources.html`、设置 `/settings.html`。各页共用 `/app.js` 和 `/style.css`，在手机宽度下会调整导航和内容布局。
 
-默认只监听本机。要让局域网访问，显式设置 `--listen 0.0.0.0:4488`，并通过环境变量 `MOVIEHUB_TOKEN` 提供至少 24 字符的随机令牌；请求 API 时使用 `Authorization: Bearer <令牌>`。不要把该服务直接暴露到公网。
+默认只监听本机。局域网使用时显式设置 `--listen 192.168.1.2:4488` 等服务器内网地址。管理 API 不再要求访问令牌，因此只应绑定可信局域网接口，不要映射到公网。
+
+Linux 用户服务可用 `scripts/moviehub-service.sh check-update` 检查公开 GitHub Release，用 `scripts/moviehub-service.sh update` 在线下载、SHA256 校验并升级。升级脚本原子替换程序、重启服务并核对 `/healthz` 的版本；启动失败会恢复旧程序。
 
 ## 数据和媒体
 
