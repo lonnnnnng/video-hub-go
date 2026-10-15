@@ -75,12 +75,14 @@ type Follow struct {
 }
 
 type Job struct {
-	ID          string    `json:"id"`
-	SourceID    string    `json:"sourceId"`
-	VideoID     string    `json:"videoId"`
-	Title       string    `json:"title"`
-	Year        string    `json:"year"`
-	Plot        string    `json:"plot"`
+	ID       string `json:"id"`
+	SourceID string `json:"sourceId"`
+	VideoID  string `json:"videoId"`
+	Title    string `json:"title"`
+	Year     string `json:"year"`
+	Plot     string `json:"plot"`
+	// long: 海报随任务保存，下载完成后不必为每一集重新请求资源站详情。
+	Poster      string    `json:"poster,omitempty"`
 	LineID      string    `json:"lineId"`
 	Episode     Episode   `json:"episode"`
 	Season      int       `json:"season"`

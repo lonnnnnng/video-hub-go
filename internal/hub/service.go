@@ -81,6 +81,8 @@ func (s *Service) Start() error {
 	}
 	slog.Info("后台调度已启动", "recovered_jobs", recovered)
 	s.wg.Add(1)
+	go func() { defer s.wg.Done(); s.posterLoop() }()
+	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		if len(s.Store.Snapshot().Sources) == 0 {
@@ -290,7 +292,7 @@ func enqueue(st *State, v Video, l Line, eps []Episode, season int) int {
 			continue
 		}
 		now := time.Now()
-		st.Jobs = append(st.Jobs, Job{ID: uid(), SourceID: v.SourceID, VideoID: v.ID, Title: v.Title, Year: v.Year, Plot: v.Plot, LineID: l.ID, Episode: ep, Season: season, Status: "queued", MediaDir: st.Settings.MediaDir, CreatedAt: now, UpdatedAt: now})
+		st.Jobs = append(st.Jobs, Job{ID: uid(), SourceID: v.SourceID, VideoID: v.ID, Title: v.Title, Year: v.Year, Plot: v.Plot, Poster: v.Poster, LineID: l.ID, Episode: ep, Season: season, Status: "queued", MediaDir: st.Settings.MediaDir, CreatedAt: now, UpdatedAt: now})
 		n++
 	}
 	return n

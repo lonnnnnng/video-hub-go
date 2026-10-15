@@ -3,7 +3,7 @@
 ## 触发规则
 
 - 普通提交和 `git push origin main` 仅同步代码，不触发 Release 流水线。
-- 只有用户明确要求“发版”时，才在代码推送后创建并推送正式版本标签，例如 `v0.4.1`。
+- 只有用户明确要求“发版”时，才在代码推送后创建并推送正式版本标签，例如 `v0.4.2`。
 - 流水线仅接受 `v数字.数字.数字` 格式，不提供定时发版或分支推送发版。
 - 自动构建与发布由 GitHub Actions 完成；Linux 部署是独立步骤，需在明确要求更新部署时执行。
 
@@ -15,8 +15,8 @@
 
    ```bash
    git push origin main
-   git tag -a v0.4.1 -m '发布v0.4.1'
-   git push origin v0.4.1
+   git tag -a v0.4.2 -m '发布v0.4.2'
+   git push origin v0.4.2
    ```
 
 4. 在 [Actions](https://github.com/lonnnnnng/video-hub-go/actions/workflows/release.yml) 确认“发布 Linux Release”运行成功。
@@ -36,3 +36,4 @@
 - 服务器程序的 SHA256 与对应架构资产一致。
 - 原有任务和站源保留；新增完成时间已从 MP4 补齐。
 - 网页能加载新资源，检测更新结果符合最新 Release。
+- 已完成任务的缺失海报由后台补查；Emby 能读取剧集和季海报，媒体库入口封面由 Emby 生成。

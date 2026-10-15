@@ -52,10 +52,10 @@ Go 服务内置网页管理台与 HLS 下载器，部署时无需单独运行下
 
 ### 方式一：使用 Linux Release
 
-以下命令在 **Linux 服务器**执行，示例安装 v0.4.1。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
+以下命令在 **Linux 服务器**执行，示例安装 v0.4.2。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
 
 ```bash
-version=v0.4.1
+version=v0.4.2
 git clone --depth 1 --branch "$version" https://github.com/lonnnnnng/video-hub-go.git
 cd video-hub-go
 
@@ -145,7 +145,7 @@ macOS 开发机也可使用 `./scripts/build.sh` 和 `./scripts/run.sh`，两者
 | 操作 | 结果 |
 | --- | --- |
 | 仅删除任务 | 移除队列记录，保留媒体与临时文件；该任务的网页播放入口随之移除。 |
-| 删除任务及文件 | 先停止下载并等待退出，再清理本集 MP4、分集 NFO、入库收据及该任务的临时分片；保留其他集和共享的 `tvshow.nfo`。 |
+| 删除任务及文件 | 先停止下载并等待退出，再清理本集 MP4、分集 NFO、入库收据及该任务的临时分片；保留其他集、共享的 `tvshow.nfo` 和海报。 |
 
 文件删除失败时保留任务及错误，供排查后重试。删除已发布的媒体文件会安排 Emby 刷新。
 
@@ -161,6 +161,10 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 下载完成后，服务将 MP4 和 NFO 发布到媒体目录，保存完成状态，再请求 Emby 刷新媒体库。扫描请求失败时保留待办，每分钟重试；首次启用或更换 Emby 地址、密钥时也会安排扫描。
 
 服务通过 `POST /Library/Refresh` 通知 Emby 读取共享媒体目录。Emby 服务器地址填写 Emby 自身的地址和端口；设置页中的扫描时间表示 Emby 已接受刷新请求，实际扫描完成时间由 Emby 决定。
+
+**海报自动入库：** 下载任务会保留资源站提供的海报地址。后台按剧集补齐剧目录和季目录中的 `poster.jpg` 或 `poster.png`，同剧多集共用一次图片下载；文件完整落盘后再安排 Emby 刷新。旧版本的已完成任务会自动从原站源详情补查海报，无需重新下载视频。
+
+图片失败不会改变视频完成状态，每五分钟重试；已有本地海报（包括 `folder.jpg`、`seasonXX-poster.jpg` 等受支持命名）会保留。支持 JPEG/PNG 图片，最多 8 MiB、1600 万像素，网络跟随机器设置。原站源失效或未提供受支持图片时无法自动补图，可自行放置本地海报。Emby 的媒体库入口拼图由 Emby 根据剧集主海报生成，生成结果与时间由 Emby 决定。
 
 ## 配置说明
 
@@ -215,7 +219,7 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 健康检查入口为 `GET /healthz`，例如：
 
 ```json
-{"status":"ok","version":"v0.4.1"}
+{"status":"ok","version":"v0.4.2"}
 ```
 
 服务关键事件输出到标准错误流，systemd 部署通过 journal 查看，包括站源检测、追更、下载、合并、入库和 Emby 通知。HTTP 日志不记录搜索词、播放 URL、请求头、请求体或 API Key。
@@ -244,7 +248,9 @@ media/
 ├── .moviehub/                        # 下载与合并临时文件
 └── 剧名 [来源身份]/
     ├── tvshow.nfo                    # 剧集元数据
+    ├── poster.jpg                   # 剧集海报，PNG 来源保存为 poster.png
     └── Season 01/
+        ├── poster.jpg               # 季海报，与同剧分集共用
         ├── 剧名 S01E01 [分集身份].mp4
         ├── 剧名 S01E01 [分集身份].nfo
         └── 剧名 S01E01 [分集身份].mp4.moviehub.json
@@ -311,7 +317,7 @@ go vet ./...
 生成 Linux 双架构发布程序，并注入版本号：
 
 ```bash
-MOVIEHUB_VERSION=v0.4.1 ./scripts/build-linux.sh
+MOVIEHUB_VERSION=v0.4.2 ./scripts/build-linux.sh
 ```
 
 产物位于 `dist/`：`moviehub-linux-amd64`、`moviehub-linux-arm64`、`SHA256SUMS`。普通源码构建的健康版本默认为 `dev`。
