@@ -279,11 +279,7 @@ func (s *Service) Handler() http.Handler {
 		if e != nil {
 			return e
 		}
-		for i := range v.Lines {
-			for j := range v.Lines[i].Episodes {
-				v.Lines[i].Episodes[j].URL = ""
-			}
-		}
+		// long: 剧集详情需要返回资源站给出的分集播放地址，便于用户核对线路；请求详情时仍重新从站源获取最新地址。
 		writeJSON(w, 200, v)
 		return nil
 	})
