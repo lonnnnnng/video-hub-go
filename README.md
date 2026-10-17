@@ -52,10 +52,10 @@ Go 服务内置网页管理台与 HLS 下载器，部署时无需单独运行下
 
 ### 方式一：使用 Linux Release
 
-以下命令在 **Linux 服务器**执行，示例安装 v0.4.2。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
+以下命令在 **Linux 服务器**执行，示例安装 v0.4.3。安装其他版本时，将 `version` 改为 [Release 页面](https://github.com/lonnnnnng/video-hub-go/releases)中对应的标签。需要 Git、curl 和 `sha256sum`；首次安装使用尚不存在的目标目录。
 
 ```bash
-version=v0.4.2
+version=v0.4.3
 git clone --depth 1 --branch "$version" https://github.com/lonnnnnng/video-hub-go.git
 cd video-hub-go
 
@@ -227,7 +227,7 @@ Emby 是可选集成。未配置 Emby 时，仍可使用搜索、追更、下载
 健康检查入口为 `GET /healthz`，例如：
 
 ```json
-{"status":"ok","version":"v0.4.2"}
+{"status":"ok","version":"v0.4.3"}
 ```
 
 服务关键事件输出到标准错误流，systemd 部署通过 journal 查看，包括站源检测、追更、下载、合并、入库和 Emby 通知。HTTP 日志不记录搜索词、播放 URL、请求头、请求体或 API Key。
@@ -325,7 +325,7 @@ go vet ./...
 生成 Linux 双架构发布程序，并注入版本号：
 
 ```bash
-MOVIEHUB_VERSION=v0.4.2 ./scripts/build-linux.sh
+MOVIEHUB_VERSION=v0.4.3 ./scripts/build-linux.sh
 ```
 
 产物位于 `dist/`：`moviehub-linux-amd64`、`moviehub-linux-arm64`、`SHA256SUMS`。普通源码构建的健康版本默认为 `dev`。
