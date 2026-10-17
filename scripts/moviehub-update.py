@@ -21,7 +21,16 @@ TRUSTED_HOSTS = {"github.com", "release-assets.githubusercontent.com", "objects.
 MAX_BINARY = 128 * 1024 * 1024
 SYSTEMCTL = ["systemctl", "--user"] if os.environ.get("MOVIEHUB_SYSTEMD_SCOPE", "user") == "user" else ["systemctl"]
 SERVICE = os.environ.get("MOVIEHUB_SERVICE_NAME", "video-hub-go")
-BINARY = Path(os.environ.get("MOVIEHUB_BINARY", str(Path(__file__).resolve().parent.parent / "bin/moviehub")))
+
+
+def default_binary():
+    script = Path(__file__).resolve()
+    sibling = script.with_name("moviehub")
+    # long: 生产目录把程序与脚本平铺放置；源码仓库仍从 bin/ 读取，兼容两种布局。
+    return sibling if sibling.is_file() else script.parent.parent / "bin/moviehub"
+
+
+BINARY = Path(os.environ["MOVIEHUB_BINARY"]) if os.environ.get("MOVIEHUB_BINARY") else default_binary()
 
 
 def read_url(url, limit, release_asset=False):

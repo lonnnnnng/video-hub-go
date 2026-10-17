@@ -4,17 +4,28 @@
 
 ## 当前服务器：用户服务
 
-通过 SSH 登录服务器后，以 `lee` 用户执行，不要加 `sudo`：
+当前服务器采用平铺运行目录，主程序和脚本与 `data/`、`media/` 同级；服务器目录不包含源码仓库中的 `scripts/`、文档、测试或构建产物：
+
+```text
+/home/lee/video-hub-go/
+├── moviehub
+├── moviehub-service.sh
+├── moviehub-update.py
+├── data/
+└── media/
+```
+
+`video-hub-go.service` 的 `ExecStart` 直接运行 `/home/lee/video-hub-go/moviehub`，数据和媒体目录分别是该目录下的 `data/`、`media/`。通过 SSH 登录服务器后，以 `lee` 用户执行管理命令，不要加 `sudo`：
 
 ```bash
 ssh -i ~/.ssh/id_ed25519 lee@192.168.1.2
 cd /home/lee/video-hub-go
-./scripts/moviehub-service.sh help
-./scripts/moviehub-service.sh status
-./scripts/moviehub-service.sh health
+./moviehub-service.sh help
+./moviehub-service.sh status
+./moviehub-service.sh health
 ```
 
-当前服务名为 `video-hub-go.service`，监听 `192.168.1.2:4444`。管理页面为 `http://192.168.1.2:4444/`。`health` 会读取 unit 中的 `--listen` 参数并查询 `/healthz`；正常时输出运行版本，例如 `服务健康：v0.2.0`。
+当前服务名为 `video-hub-go.service`，监听 `192.168.1.2:4444`。管理页面为 `http://192.168.1.2:4444/`。`health` 会读取 unit 中的 `--listen` 参数并查询 `/healthz`，输出当前运行版本。
 
 | 命令 | 用途 |
 | --- | --- |
@@ -54,14 +65,14 @@ journalctl --user -u video-hub-go-web-update.service -n 100
 
 ```bash
 cd /home/lee/video-hub-go
-./scripts/moviehub-service.sh check-update
-./scripts/moviehub-service.sh update
-./scripts/moviehub-service.sh health
-./scripts/moviehub-service.sh status
-./scripts/moviehub-service.sh logs
+./moviehub-service.sh check-update
+./moviehub-service.sh update
+./moviehub-service.sh health
+./moviehub-service.sh status
+./moviehub-service.sh logs
 ```
 
-`check-update` 只查询 Release 元数据，旧版服务的健康接口没有版本字段时，当前版本可能显示 `unknown`。`update` 支持 Linux `amd64`、`arm64`：下载 GitHub Release 中的对应程序及 `SHA256SUMS`，校验 SHA256 后原子替换程序、重启服务，并在 30 秒内检查 `/healthz` 是否报告目标版本。成功时打印旧程序备份路径（`bin/moviehub.previous-时间戳`）。升级失败时脚本会尝试恢复旧程序并重启；若恢复或重启也失败，应查看错误输出和 `logs`，人工检查备份及服务状态。
+`check-update` 只查询 Release 元数据，旧版服务的健康接口没有版本字段时，当前版本可能显示 `unknown`。`update` 支持 Linux `amd64`、`arm64`：下载 GitHub Release 中的对应程序及 `SHA256SUMS`，校验 SHA256 后原子替换程序、重启服务，并在 30 秒内检查 `/healthz` 是否报告目标版本。成功时打印程序旁边的旧版本备份路径（`moviehub.previous-时间戳`）。升级失败时脚本会尝试恢复旧程序并重启；若恢复或重启也失败，应查看错误输出和 `logs`，人工检查备份及服务状态。
 
 升级器使用机器本身的网络环境访问 GitHub，没有内置代理配置。`check-update` 和 `update` 都要求当前服务健康且可访问；服务已经停止时，先用 `status`、`logs` 排查并启动服务。升级前建议备份 `data/` 和 `media/`，尤其是 JSON 状态文件。升级后除 `health` 外，还应按需验证下载及 Emby 扫描。
 
@@ -71,7 +82,7 @@ cd /home/lee/video-hub-go
 | --- | --- | --- |
 | `MOVIEHUB_SYSTEMD_SCOPE` | `user` | `user` 调用 `systemctl --user`；`system` 调用系统级 `systemctl`。 |
 | `MOVIEHUB_SERVICE_NAME` | `video-hub-go` | systemd unit 名，不带 `.service`；升级命令使用小写字母、数字和连字符。 |
-| `MOVIEHUB_BINARY` | 管理脚本上级目录的 `bin/moviehub` | `update` 要替换的程序文件；必须是普通文件。 |
+| `MOVIEHUB_BINARY` | 脚本同目录的 `moviehub`；若不存在，则使用上上级目录的 `bin/moviehub` | `update` 要替换的程序文件；必须是普通文件。 |
 | `MOVIEHUB_HEALTH_URL` | 从 unit 的 `ExecStart --listen` 推导 | 健康检查 URL；仅在 unit 没有 `--listen` 或需覆盖地址时设置，例如 `http://192.168.1.2:4444/healthz`。 |
 
 环境变量只影响**当前命令**。例如管理其他用户服务：

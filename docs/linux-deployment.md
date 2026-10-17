@@ -1,6 +1,8 @@
 # Linux 与 systemd 部署
 
-当前项目提供 Linux `amd64`、`arm64` 构建脚本、systemd unit 模板和管理脚本。模板生成脚本只写出待审阅的文件，不会修改 `/etc`、执行 `sudo` 或启动服务。公开 GitHub Release 提供带校验和的构建产物。
+当前项目提供 Linux `amd64`、`arm64` 构建脚本、systemd unit 模板和管理脚本。本文介绍新建部署的通用分层布局：程序放在 `/opt/moviehub/bin/`，状态与媒体分别放在独立目录，管理脚本放在 `/usr/local/bin/`。模板生成脚本只写出待审阅的文件，不会修改 `/etc`、执行 `sudo` 或启动服务。公开 GitHub Release 提供带校验和的构建产物。
+
+现有服务器使用 `/home/lee/video-hub-go/` 平铺布局，程序、两个管理脚本、`data/` 与 `media/` 同级；它的 unit 直接启动目录中的 `moviehub`。该实际目录结构和管理命令见[服务管理说明](service-management.md#当前服务器用户服务)，不要把本文的 `/opt/moviehub/bin/` 路径套用到现有服务器。
 
 ## 构建与准备
 
@@ -58,7 +60,7 @@ sudo install -m 0644 scripts/moviehub-update.py /usr/local/bin/moviehub-update.p
 
 完整命令、环境变量、用户服务与系统服务示例，以及在线升级排查方式见 [服务管理脚本说明](service-management.md)。
 
-当前服务器的用户服务可以直接运行 `scripts/moviehub-service.sh status`、`logs`、`health`、`check-update`、`update`。上述 `/etc/systemd/system` 示例属于系统服务，使用 `/usr/local/bin/moviehub-service` 前需设置：
+现有服务器的用户服务以 `lee` 用户从 `/home/lee/video-hub-go/` 执行 `./moviehub-service.sh status`、`logs`、`health`、`check-update`、`update`。下方 `/etc/systemd/system` 示例则是本文的通用系统服务安装方式：管理脚本安装到 `/usr/local/bin`，程序放在 `/opt/moviehub/bin/moviehub`，运行前需设置：
 
 ```bash
 export MOVIEHUB_SYSTEMD_SCOPE=system
