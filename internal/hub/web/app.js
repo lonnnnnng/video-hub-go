@@ -9,7 +9,7 @@ let checkingSources = false;
 let homeClasses = [];
 const collectionPageSize = 20;
 let homeCache, searchCache;
-const labels = {queued:'等待下载',downloading:'下载中',paused:'已暂停',canceled:'已取消',failed:'下载失败',completed:'已入库'};
+const labels = {queued:'等待下载',downloading:'下载中',paused:'已暂停',canceled:'已取消',failed:'下载失败',completed:'已下载'};
 function notice(message, error = false) { $('notice').textContent = message; $('notice').className = error ? 'notice error' : 'notice'; $('notice').hidden = false; }
 async function api(path, body) {
  const headers = {};

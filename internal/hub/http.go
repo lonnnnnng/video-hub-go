@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"movie-hub-go/internal/embycheck"
 	"net"
 	"net/http"
 	"net/url"
@@ -202,6 +203,9 @@ func (s *Service) Handler() http.Handler {
 			st.Settings = cfg
 			if changed {
 				st.Emby.Revision++
+				for i := range st.Jobs {
+					st.Jobs[i].EmbyMedia = embycheck.Status{}
+				}
 				if cfg.EmbyEnabled {
 					st.Emby.Pending = true
 					st.Emby.NextAttempt = time.Now()
@@ -350,6 +354,14 @@ func (s *Service) Handler() http.Handler {
 			return e
 		}
 		writeJSON(w, 200, map[string]int{"queued": n})
+		return nil
+	})
+	api("POST /api/jobs/cleanup", func(w http.ResponseWriter, r *http.Request) error {
+		select {
+		case s.cleanupWake <- struct{}{}:
+		default:
+		}
+		writeJSON(w, http.StatusAccepted, map[string]bool{"pending": true})
 		return nil
 	})
 	api("POST /api/jobs/{id}/{action}", func(w http.ResponseWriter, r *http.Request) error {

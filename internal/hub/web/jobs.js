@@ -57,6 +57,9 @@ function renderJobs() {
    const completed=el('time',valid?'完成 '+new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(date).replaceAll('/','-'):'完成时间未知','task-completed');
    if(valid){completed.dateTime=job.completedAt;completed.title='MP4 合成完成时间（当前时区）';}
    metrics.append(completed);
+   const media=job.embyMedia||{},enabled=snapshot.state.settings.embyEnabled;
+   const state=enabled?(media.state==='confirmed'?'Emby 已识别':media.state==='error'?'Emby 入库待处理':'等待 Emby 扫描'):'Emby 自动扫描未启用';
+   metrics.append(el('span',state,media.state==='confirmed'&&enabled?'good':'task-wait'));
   }else if(job.status==='queued'&&new Date(job.nextAttempt)>new Date()){
    metrics.append(el('span',new Date(job.nextAttempt).toLocaleTimeString('zh-CN')+' 后重试','task-wait'));
   }
@@ -67,13 +70,19 @@ function renderJobs() {
   if(['paused','failed','canceled'].includes(job.status))action(job.status==='paused'?'继续':'重试','resume');
   if(!['completed','canceled'].includes(job.status))action('取消','cancel');
   const remove=iconButton('trash','删除 '+job.title+' / '+job.episode.name,()=>openDeleteJob(job));remove.classList.add('danger-button');actions.append(remove);
-  row.append(main,metrics,el('span',labels[job.status]||job.status,'badge '+(job.status==='completed'?'good':job.status==='failed'?'bad':'')),actions);
+  row.append(main,metrics,el('span',job.status==='queued'&&job.waitingForSpace?'等待磁盘空间':labels[job.status]||job.status,'badge '+(job.status==='completed'?'good':job.status==='failed'?'bad':'')),actions);
   if(job.error){const error=el('p',job.error,'error-text task-error');row.append(error);}
+  if(job.cleanupError)row.append(el('p','临时清理：'+job.cleanupError,'error-text task-error'));
+  if(snapshot.state.settings.embyEnabled&&job.embyMedia?.error)row.append(el('p',job.embyMedia.error,'error-text task-error'));
   root.append(row);
  }
 }
 $('jobFilter').onchange=renderJobs;
 $('jobSearch').oninput=renderJobs;
+$('cleanupTemporary').onclick=()=>act($('cleanupTemporary'),async()=>{
+ if(!window.confirm('清理已完成任务的临时分片？程序会先校验正式 MP4，保留视频、NFO、海报和任务记录。'))return;
+ await api('jobs/cleanup',{});notice('临时清理已安排，校验及清理将在后台执行。');
+});
 $('closeLocalPlayer').onclick=()=>localDialog.close();
 localDialog.addEventListener('close',stopLocalPlayback);
 window.addEventListener('pagehide',stopLocalPlayback);

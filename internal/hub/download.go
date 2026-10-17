@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"movie-hub-go/internal/embycheck"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -215,7 +216,7 @@ func (s *Service) runJob(ctx context.Context, j Job) {
 	// long: 每次尝试独立保存分片，签名 URL 或片单变化后不会误用上一次的媒体数据。
 	staging := filepath.Join(j.MediaDir, ".moviehub", j.ID, uid())
 	if e = os.MkdirAll(staging, 0700); e != nil {
-		s.finishError(j, errors.New("无法创建下载目录，请检查权限和磁盘"))
+		s.finishError(j, fmt.Errorf("无法创建下载目录，请检查权限和磁盘：%w", e))
 		return
 	}
 	attemptCtx, cancel := context.WithTimeout(ctx, 24*time.Hour)
@@ -225,10 +226,10 @@ func (s *Service) runJob(ctx context.Context, j Job) {
 	slog.Info("HLS 下载与封装开始", "job_id", j.ID, "threads", cfg.Threads)
 	e = downloadHLS(attemptCtx, ep.URL, src.Headers, staging, selected, cfg.FFmpeg, cfg.Threads, func(p float64, speed string) {
 		s.progress(j.ID, p, speed)
-	})
+	}, s.requireSpace)
 	if e != nil {
 		slog.Warn("HLS 下载与封装失败", "job_id", j.ID, "duration_ms", time.Since(started).Milliseconds())
-		s.finishError(j, e)
+		s.finishAttemptError(j, staging, e)
 		return
 	}
 	slog.Info("HLS 下载与封装完成", "job_id", j.ID, "duration_ms", time.Since(started).Milliseconds())
@@ -238,7 +239,7 @@ func (s *Service) runJob(ctx context.Context, j Job) {
 		return
 	}
 	if e = s.publish(ctx, j, selected, cfg); e != nil {
-		s.finishError(j, e)
+		s.finishAttemptError(j, staging, e)
 	}
 }
 func (s *Service) publish(ctx context.Context, j Job, from string, cfg Settings) error {
@@ -297,6 +298,7 @@ func (s *Service) publish(ctx context.Context, j Job, from string, cfg Settings)
 		for i := range st.Jobs {
 			if st.Jobs[i].ID == j.ID {
 				st.Jobs[i].Status = "completed"
+				st.Jobs[i].EmbyMedia = embycheck.Pending(time.Now())
 				st.Jobs[i].Output = dest
 				st.Jobs[i].SizeBytes = info.Size()
 				// long: 正常发布和崩溃恢复都保留 MP4 合成后的时间，不使用补写任务状态的时间。

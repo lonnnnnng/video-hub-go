@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"movie-hub-go/internal/embycheck"
 	"net/http"
 	"net/url"
 	"strings"
@@ -30,6 +31,11 @@ func (s *Service) RequestScan() error {
 		st.Emby.Revision++
 		st.Emby.NextAttempt = time.Now()
 		st.Emby.Error = ""
+		for i := range st.Jobs {
+			if st.Jobs[i].Status == "completed" {
+				st.Jobs[i].EmbyMedia = embycheck.Pending(time.Now())
+			}
+		}
 		return nil
 	})
 	if err == nil {

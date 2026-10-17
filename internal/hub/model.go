@@ -1,6 +1,9 @@
 package hub
 
-import "time"
+import (
+	"movie-hub-go/internal/embycheck"
+	"time"
+)
 
 const SourceListURL = "https://raw.githubusercontent.com/lonnnnnng/resources/main/dist/video/lite.json"
 
@@ -82,18 +85,21 @@ type Job struct {
 	Year     string `json:"year"`
 	Plot     string `json:"plot"`
 	// long: 海报随任务保存，下载完成后不必为每一集重新请求资源站详情。
-	Poster      string    `json:"poster,omitempty"`
-	LineID      string    `json:"lineId"`
-	Episode     Episode   `json:"episode"`
-	Season      int       `json:"season"`
-	Status      string    `json:"status"`
-	Progress    float64   `json:"progress"`
-	Speed       string    `json:"speed,omitempty"`
-	Attempts    int       `json:"attempts"`
-	NextAttempt time.Time `json:"nextAttempt"`
-	Error       string    `json:"error,omitempty"`
-	Output      string    `json:"output,omitempty"`
-	SizeBytes   int64     `json:"sizeBytes,omitempty"`
+	Poster          string           `json:"poster,omitempty"`
+	LineID          string           `json:"lineId"`
+	Episode         Episode          `json:"episode"`
+	Season          int              `json:"season"`
+	Status          string           `json:"status"`
+	Progress        float64          `json:"progress"`
+	Speed           string           `json:"speed,omitempty"`
+	Attempts        int              `json:"attempts"`
+	NextAttempt     time.Time        `json:"nextAttempt"`
+	Error           string           `json:"error,omitempty"`
+	Output          string           `json:"output,omitempty"`
+	SizeBytes       int64            `json:"sizeBytes,omitempty"`
+	CleanupError    string           `json:"cleanupError,omitempty"`
+	WaitingForSpace bool             `json:"waitingForSpace,omitempty"`
+	EmbyMedia       embycheck.Status `json:"embyMedia,omitempty"`
 	// long: 完成时间固定取最终 MP4 的修改时间，服务重启和任务恢复不能改写为当前时间。
 	CompletedAt time.Time `json:"completedAt,omitzero"`
 	// long: 入队时冻结落盘目录，调整全局设置不会把暂停任务的分片和最终文件拆到不同位置。

@@ -106,6 +106,10 @@ func (s *Service) DeleteJob(ctx context.Context, id string, deleteFiles bool) er
 		s.mu.Unlock()
 		return errors.New("任务正在删除，请稍候")
 	}
+	if s.cleaning[id] {
+		s.mu.Unlock()
+		return errors.New("临时分片正在校验清理，请稍后重试删除")
+	}
 	var job Job
 	for _, candidate := range s.Store.Snapshot().Jobs {
 		if candidate.ID == id {

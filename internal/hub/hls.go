@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"movie-hub-go/internal/diskspace"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,9 +33,17 @@ type hlsPart struct {
 }
 
 type hlsFetcher struct {
-	client  *http.Client
-	headers map[string]string
-	onBytes func(int)
+	client     *http.Client
+	headers    map[string]string
+	onBytes    func(int)
+	spaceCheck func(string, uint64) error
+}
+
+func (f *hlsFetcher) requireSpace(path string, reserve uint64) error {
+	if f.spaceCheck != nil {
+		return f.spaceCheck(path, reserve)
+	}
+	return diskspace.Require(path, reserve)
 }
 
 func newHLSFetcher(headers map[string]string) *hlsFetcher {
@@ -432,6 +441,9 @@ func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir stri
 					data, err = decryptHLS(data, part.key, part.iv)
 				}
 				if err == nil {
+					err = tracked.requireSpace(dir, uint64(len(data)))
+				}
+				if err == nil {
 					err = os.WriteFile(filepath.Join(dir, part.name), data, 0600)
 				}
 				if err != nil {
@@ -487,8 +499,12 @@ func fetchHLSParts(ctx context.Context, f *hlsFetcher, parts []hlsPart, dir stri
 	}
 }
 
-func downloadHLS(ctx context.Context, address string, headers map[string]string, staging, output, ffmpeg string, threads int, progress func(float64, string)) error {
-	return downloadHLSWithFetcher(ctx, newHLSFetcher(headers), address, staging, output, ffmpeg, threads, progress)
+func downloadHLS(ctx context.Context, address string, headers map[string]string, staging, output, ffmpeg string, threads int, progress func(float64, string), guards ...func(string, uint64) error) error {
+	f := newHLSFetcher(headers)
+	if len(guards) > 0 {
+		f.spaceCheck = guards[0]
+	}
+	return downloadHLSWithFetcher(ctx, f, address, staging, output, ffmpeg, threads, progress)
 }
 
 func downloadHLSWithFetcher(ctx context.Context, f *hlsFetcher, address, staging, output, ffmpeg string, threads int, progress func(float64, string)) error {
@@ -512,13 +528,45 @@ func downloadHLSWithFetcher(ctx context.Context, f *hlsFetcher, address, staging
 	}
 	slog.Info("HLS 分片已取回", "parts", len(parts), "duration_ms", time.Since(started).Milliseconds())
 	playlistPath := filepath.Join(staging, "local.m3u8")
+	var reserve uint64
+	files, err := os.ReadDir(staging)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		info, e := file.Info()
+		if e != nil {
+			return e
+		}
+		if info.Mode().IsRegular() {
+			reserve += uint64(info.Size())
+		}
+	}
+	// long: 分片已占用磁盘，封装还会生成一份 MP4；开始 FFmpeg 前为成品另留空间。
+	if err := f.requireSpace(staging, reserve); err != nil {
+		return err
+	}
 	if err = os.WriteFile(playlistPath, []byte(playlist), 0600); err != nil {
 		return err
 	}
-	cmd := command(ctx, ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file,crypto", "-allowed_extensions", "ALL", "-i", playlistPath, "-c", "copy", "-movflags", "+faststart", "-f", "mp4", output)
+	muxCtx, cancel := context.WithCancel(ctx)
+	spaceResult := diskspace.Watch(muxCtx, staging, cancel)
+	cmd := command(muxCtx, ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file,crypto", "-allowed_extensions", "ALL", "-i", playlistPath, "-c", "copy", "-movflags", "+faststart", "-f", "mp4", output)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	if err = cmd.Run(); err != nil {
+	err = cmd.Run()
+	cancel()
+	spaceErr := <-spaceResult
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if spaceErr != nil {
+		return spaceErr
+	}
+	if err != nil {
+		if spaceErr := diskspace.FFmpegError(stderr.String()); spaceErr != nil {
+			return spaceErr
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

@@ -7,32 +7,38 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"movie-hub-go/internal/diskspace"
+	"os"
 	"sync"
 	"time"
 )
 
 type Service struct {
-	Store    *Store
-	CMS      *CMS
-	ctx      context.Context
-	cancel   context.CancelFunc
-	mu       sync.Mutex
-	active   map[string]context.CancelFunc
-	workers  map[string]chan struct{}
-	deleting map[string]bool
-	started  bool
-	wg       sync.WaitGroup
-	followMu sync.Mutex
-	embyMu   sync.Mutex
-	checkMu  sync.Mutex
-	updates  *updateManager
+	Store        *Store
+	CMS          *CMS
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mu           sync.Mutex
+	active       map[string]context.CancelFunc
+	workers      map[string]chan struct{}
+	deleting     map[string]bool
+	cleaning     map[string]bool
+	cleanupWake  chan struct{}
+	spaceCheck   func(string, uint64) error
+	spaceWaiting map[string]string
+	started      bool
+	wg           sync.WaitGroup
+	followMu     sync.Mutex
+	embyMu       sync.Mutex
+	checkMu      sync.Mutex
+	updates      *updateManager
 }
 
 var errJobChanged = errors.New("任务状态已变化")
 
 func NewService(store *Store) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{Store: store, CMS: NewCMS(), ctx: ctx, cancel: cancel, active: map[string]context.CancelFunc{}, workers: map[string]chan struct{}{}, deleting: map[string]bool{}, updates: newUpdateManager(store.dir)}
+	return &Service{Store: store, CMS: NewCMS(), ctx: ctx, cancel: cancel, active: map[string]context.CancelFunc{}, workers: map[string]chan struct{}{}, deleting: map[string]bool{}, cleaning: map[string]bool{}, cleanupWake: make(chan struct{}, 1), updates: newUpdateManager(store.dir)}
 }
 func uid() string {
 	var b [12]byte
@@ -81,6 +87,8 @@ func (s *Service) Start() error {
 	}
 	slog.Info("后台调度已启动", "recovered_jobs", recovered)
 	s.wg.Add(1)
+	go func() { defer s.wg.Done(); s.cleanupLoop() }()
+	s.wg.Add(1)
 	go func() { defer s.wg.Done(); s.posterLoop() }()
 	s.wg.Add(1)
 	go func() {
@@ -100,7 +108,7 @@ func (s *Service) Start() error {
 				s.dispatch()
 				s.wg.Add(2)
 				go func() { defer s.wg.Done(); s.checkDue() }()
-				go func() { defer s.wg.Done(); s.syncEmby(s.ctx) }()
+				go func() { defer s.wg.Done(); s.syncEmby(s.ctx); s.confirmEmbyMedia(s.ctx) }()
 			}
 		}
 	}()
@@ -498,6 +506,7 @@ func (s *Service) JobAction(id, action string) error {
 				j.Attempts = 0
 				j.Error = ""
 				j.NextAttempt = time.Time{}
+				j.WaitingForSpace = false
 			default:
 				return errors.New("未知任务操作")
 			}
@@ -523,6 +532,9 @@ func (s *Service) dispatch() {
 	if s.ctx.Err() != nil {
 		return
 	}
+	if !s.restoreSpaceWaitLocked() {
+		return
+	}
 	st := s.Store.Snapshot()
 	capacity := st.Settings.Workers - len(s.active)
 	for _, j := range st.Jobs {
@@ -536,12 +548,31 @@ func (s *Service) dispatch() {
 			continue
 		}
 		job := j
+		if info, err := os.Stat(jobPath(j)); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			if err := s.requireSpace(j.MediaDir, 0); err != nil {
+				if saveErr := s.Store.Update(func(st *State) error {
+					for i := range st.Jobs {
+						if st.Jobs[i].ID == j.ID && st.Jobs[i].Status == "queued" {
+							st.Jobs[i].WaitingForSpace = true
+							st.Jobs[i].Error = err.Error()
+							st.Jobs[i].NextAttempt = time.Now().Add(30 * time.Second)
+						}
+					}
+					return nil
+				}); saveErr != nil {
+					slog.Warn("磁盘空间等待状态保存失败", "job_id", j.ID)
+				}
+				continue
+			}
+		}
 		found := false
 		err := s.Store.Update(func(st *State) error {
 			for i := range st.Jobs {
 				if st.Jobs[i].ID == job.ID && st.Jobs[i].Status == "queued" {
 					found = true
 					st.Jobs[i].Status = "downloading"
+					st.Jobs[i].WaitingForSpace = false
+					st.Jobs[i].Error = ""
 					st.Jobs[i].Attempts++
 					st.Jobs[i].UpdatedAt = time.Now()
 					job = st.Jobs[i]
@@ -575,6 +606,10 @@ func (s *Service) dispatch() {
 				delete(s.workers, job.ID)
 				close(done)
 				s.mu.Unlock()
+				select {
+				case s.cleanupWake <- struct{}{}:
+				default:
+				}
 			}()
 			s.runJob(ctx, job)
 		}()
@@ -619,13 +654,23 @@ func (s *Service) finishError(job Job, err error) {
 			}
 			j.Speed = ""
 			j.UpdatedAt = time.Now()
+			j.Error = err.Error()
+			if diskspace.IsWaiting(err) {
+				j.Status = "queued"
+				j.WaitingForSpace = true
+				j.NextAttempt = time.Now().Add(30 * time.Second)
+				if j.Attempts > 0 {
+					j.Attempts--
+				}
+				status, nextAttempt = j.Status, j.NextAttempt
+				break
+			}
 			if s.ctx.Err() != nil {
 				j.Status = "queued"
 				status = j.Status
 				j.Error = "服务停止，等待重新启动"
 				break
 			}
-			j.Error = err.Error()
 			j.Status = "failed"
 			if j.Attempts < st.Settings.MaxAttempts {
 				j.Status = "queued"
@@ -637,6 +682,12 @@ func (s *Service) finishError(job Job, err error) {
 		return nil
 	})
 	if e != nil {
+		if diskspace.IsWaiting(err) {
+			if s.spaceWaiting == nil {
+				s.spaceWaiting = make(map[string]string)
+			}
+			s.spaceWaiting[job.ID] = err.Error()
+		}
 		slog.Error("保存任务失败状态失败", "job_id", job.ID)
 	} else {
 		// long: 下载错误可能包含资源站签名地址或 FFmpeg 输出，日志只记任务阶段与重试状态。
