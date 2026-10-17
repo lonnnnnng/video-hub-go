@@ -68,6 +68,7 @@ function renderJobs() {
   if(job.status==='completed')actions.append(button('播放',()=>playDownloaded(job)));
   if(['queued','downloading'].includes(job.status))action('暂停','pause');
   if(['paused','failed','canceled'].includes(job.status))action(job.status==='paused'?'继续':'重试','resume');
+  if(['queued','paused','failed','canceled'].includes(job.status))actions.append(button(job.status==='queued'?'调整线路/季号':'换线路重试',()=>openConfigureJob(job)));
   if(!['completed','canceled'].includes(job.status))action('取消','cancel');
   const remove=iconButton('trash','删除 '+job.title+' / '+job.episode.name,()=>openDeleteJob(job));remove.classList.add('danger-button');actions.append(remove);
   row.append(main,metrics,el('span',job.status==='queued'&&job.waitingForSpace?'等待磁盘空间':labels[job.status]||job.status,'badge '+(job.status==='completed'?'good':job.status==='failed'?'bad':'')),actions);
@@ -79,6 +80,42 @@ function renderJobs() {
 }
 $('jobFilter').onchange=renderJobs;
 $('jobSearch').oninput=renderJobs;
+let configuringJob,configureVideo,configureSequence=0,configurationPending=false;
+function renderConfigureEpisodes(){
+ const line=configureVideo.lines.find(line=>line.id===$('configureLine').value);
+ const episodes=line?.episodes||[];
+ $('configureEpisode').replaceChildren(...episodes.map(ep=>{const option=el('option',ep.name);option.value=ep.key;return option;}));
+ // long: 标签不同的线路不能自动认定为同一集，保留空选择让用户核对；稳定集名相同时才预选。
+ $('configureEpisode').value=episodes.some(ep=>ep.key===configuringJob.episode.key)?configuringJob.episode.key:'';
+}
+async function openConfigureJob(job){
+ const sequence=++configureSequence;
+ const video=await api('detail?'+new URLSearchParams({sourceId:job.sourceId,id:job.videoId}));
+ if(sequence!==configureSequence)return;
+ configuringJob=job;configureVideo=video;
+ $('configureJobTitle').textContent=job.status==='queued'?'调整线路和季号':'换线路重试';
+ $('configureJobOriginal').textContent=job.title+' / '+job.episode.name+' · 原第 '+job.season+' 季';
+ $('configureSeason').value=job.season;
+ $('configureLine').replaceChildren(...video.lines.map(line=>{const option=el('option',line.name);option.value=line.id;return option;}));
+ $('configureLine').value=video.lines.some(line=>line.id===job.lineId)?job.lineId:video.lines[0]?.id||'';
+ renderConfigureEpisodes();$('configureJobError').hidden=true;
+ $('saveConfigureJob').textContent=job.status==='queued'?'保存调整':'保存并重试';
+ $('configureJobDialog').showModal();
+}
+$('configureLine').onchange=renderConfigureEpisodes;
+$('cancelConfigureJob').onclick=()=>{if(!configurationPending)$('configureJobDialog').close();};
+$('configureJobDialog').addEventListener('cancel',event=>{if(configurationPending)event.preventDefault();});
+$('saveConfigureJob').onclick=()=>act($('saveConfigureJob'),async()=>{
+ const season=Number($('configureSeason').value);
+ $('configureJobError').hidden=true;configurationPending=true;
+ try{
+  if(!Number.isInteger(season)||season<1||season>999)throw new Error('季号必须为 1–999 的整数');
+  if(!$('configureEpisode').value)throw new Error('请选择新线路中对应的分集');
+  await api('jobs/'+encodeURIComponent(configuringJob.id)+'/reconfigure',{lineId:$('configureLine').value,episodeKey:$('configureEpisode').value,season,retry:configuringJob.status!=='queued',expectedUpdatedAt:configuringJob.updatedAt});
+  $('configureJobDialog').close();await refresh();notice('任务线路和季号已更新');
+ }catch(error){$('configureJobError').textContent=error.message;$('configureJobError').hidden=false;}
+ finally{configurationPending=false;}
+});
 $('cleanupTemporary').onclick=()=>act($('cleanupTemporary'),async()=>{
  if(!window.confirm('清理已完成任务的临时分片？程序会先校验正式 MP4，保留视频、NFO、海报和任务记录。'))return;
  await api('jobs/cleanup',{});notice('临时清理已安排，校验及清理将在后台执行。');

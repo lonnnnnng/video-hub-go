@@ -129,9 +129,12 @@ async function openDetail(video) {
  if (request !== detailSequence) return;
  stopPreview();
  detail = result;
- // long: 详情自动使用首选 HLS 线路；已有追更保留原线路和季号，新剧从剧名识别季号以正确归档到 Emby。
+ // long: 剧名推断只作为季号初值，用户可以核对线路和季号后再创建下载或追更。
  detailLine = detail.lines.find(line => line.id === video.lineId) || detail.lines[0];
  detailSeason = video.season || inferSeason(detail.title);
+ $('detailSeason').value = detailSeason;
+ $('detailLine').replaceChildren(...detail.lines.map(line => { const option=el('option',line.name);option.value=line.id;return option; }));
+ $('detailLine').value = detailLine?.id || '';
  playingEpisode = null;
  $('detailTitle').textContent = detail.title;
  $('detailMeta').textContent = [detail.sourceName,detail.year,detail.kind,detail.remarks].filter(Boolean).join(' / ');
@@ -149,8 +152,12 @@ async function openDetail(video) {
 }
 
 function selection() {
- return {sourceId:detail.sourceId,videoId:detail.id,lineId:detailLine?.id || '',season:detailSeason,keys:[...$('episodes').querySelectorAll('input:checked')].map(node => node.value),autoDownload:$('autoDownload').checked,backfill:$('backfill').checked};
+ const season=Number($('detailSeason').value);
+ if(!Number.isInteger(season)||season<1||season>999)throw new Error('季号必须为 1–999 的整数');
+ return {sourceId:detail.sourceId,videoId:detail.id,lineId:detailLine?.id || '',season,keys:[...$('episodes').querySelectorAll('input:checked')].map(node => node.value),autoDownload:$('autoDownload').checked,backfill:$('backfill').checked};
 }
+
+$('detailLine').onchange=()=>{stopPreview();playingEpisode=null;detailLine=detail.lines.find(line=>line.id===$('detailLine').value);renderEpisodes();highlightPlaying();$('playerEmpty').hidden=false;setPlayerStatus('线路已切换，请重新选择分集。');};
 
 async function detailAction(node, action) {
  node.disabled = true; $('detailActionStatus').hidden = true;

@@ -365,6 +365,17 @@ func (s *Service) Handler() http.Handler {
 		return nil
 	})
 	api("POST /api/jobs/{id}/{action}", func(w http.ResponseWriter, r *http.Request) error {
+		if r.PathValue("action") == "reconfigure" {
+			var input JobReconfigure
+			if err := decode(w, r, &input); err != nil {
+				return err
+			}
+			if err := s.ReconfigureJob(r.Context(), r.PathValue("id"), input); err != nil {
+				return err
+			}
+			writeJSON(w, 200, map[string]bool{"saved": true})
+			return nil
+		}
 		if action := r.PathValue("action"); action == "remove" || action == "remove-files" {
 			if err := s.DeleteJob(r.Context(), r.PathValue("id"), action == "remove-files"); err != nil {
 				return err

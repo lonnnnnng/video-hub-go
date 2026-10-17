@@ -6,6 +6,7 @@
   <main class="workspace"><p id="notice" class="notice" role="status" hidden></p><section class="page"><div class="section-head"><div><h2>正在追的剧</h2><p>新集会按设置的间隔检查。</p></div><button id="checkFollows" type="button" class="primary">立即检查更新</button></div><div id="followList" class="stack-list"></div></section></main>
   <dialog id="detailDialog" class="detail-dialog" aria-labelledby="detailTitle">
     <header class="dialog-top"><div><h2 id="detailTitle">剧集详情</h2><p id="detailMeta" class="detail-meta"></p></div><button id="closeDetail" type="button" aria-label="关闭详情">关闭</button></header>
+    <div class="fields"><label>下载线路<select id="detailLine"></select></label><label>归档季号<input id="detailSeason" type="number" min="1" max="999" step="1" required></label></div>
     <div class="detail-body">
       <section class="preview-pane" aria-label="播放预览">
         <div class="player-stage"><video id="previewVideo" controls playsinline preload="none" aria-label="剧集播放器"></video><div id="playerEmpty" class="player-empty"><span>选择分集，预览播放</span><button id="startPlayback" class="primary" type="button">播放第一集</button></div></div>

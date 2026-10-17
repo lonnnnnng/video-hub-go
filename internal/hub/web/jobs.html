@@ -9,6 +9,16 @@
     <video id="localVideo" controls playsinline preload="metadata" aria-label="已下载视频播放器"></video>
     <p id="localPlayerStatus" class="field-hint" role="status"></p>
   </dialog>
+  <dialog id="configureJobDialog" class="delete-job-dialog" aria-labelledby="configureJobTitle">
+    <h2 id="configureJobTitle">调整下载任务</h2>
+    <p id="configureJobOriginal" class="field-hint"></p>
+    <div class="fields"><label class="wide">下载线路<select id="configureLine"></select></label>
+    <label>对应分集<select id="configureEpisode"></select></label>
+    <label>季号<input id="configureSeason" type="number" min="1" max="999" step="1" required></label></div>
+    <p class="field-hint">核对新线路的分集名称后提交。已发布的媒体需在媒体库管理。</p>
+    <p id="configureJobError" class="error-text" role="alert" hidden></p>
+    <footer class="actions"><button id="cancelConfigureJob" type="button">返回</button><button id="saveConfigureJob" class="primary" type="button">保存</button></footer>
+  </dialog>
   <dialog id="deleteJobDialog" class="delete-job-dialog" aria-labelledby="deleteJobTitle" aria-describedby="deleteJobHint">
     <h2 id="deleteJobTitle">删除任务</h2>
     <p id="deleteJobHint">删除记录前会停止下载。默认保留所有文件。</p>
