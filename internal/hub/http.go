@@ -364,6 +364,21 @@ func (s *Service) Handler() http.Handler {
 		writeJSON(w, http.StatusAccepted, map[string]bool{"pending": true})
 		return nil
 	})
+	api("POST /api/jobs/batch", func(w http.ResponseWriter, r *http.Request) error {
+		var input struct {
+			IDs    []string `json:"ids"`
+			Action string   `json:"action"`
+		}
+		if err := decode(w, r, &input); err != nil {
+			return err
+		}
+		results, err := s.BatchJobAction(r.Context(), input.IDs, input.Action)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"results": results})
+		return nil
+	})
 	api("POST /api/jobs/{id}/{action}", func(w http.ResponseWriter, r *http.Request) error {
 		if r.PathValue("action") == "reconfigure" {
 			var input JobReconfigure

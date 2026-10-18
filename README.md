@@ -11,7 +11,7 @@ Video Hub Go 是面向个人与家庭局域网的剧集管理服务。它聚合 
 ## 能做什么
 
 - **找剧与追更**：从 JSON 资源站导入剧集，搜索详情、查看分集，并按计划检查新集。
-- **并发下载**：同时下载多集及其 HLS 分片；使用 FFmpeg 将媒体流复制封装为 MP4，并由 FFprobe 检查成品，不进行转码。
+- **并发下载**：同时下载多集及其 HLS 分片；使用 FFmpeg 将媒体流复制封装为 MP4，并由 FFprobe 检查成品，不进行转码。下载队列支持多选和批量暂停、继续、重试与删除。
 - **整理媒体库**：按剧名和季度归档 MP4，生成 NFO 和海报；失败的下载与同步任务可重试。
 - **同步 Emby**：文件发布后通知 Emby 刷新媒体库，并核对 Emby 是否已按本地 `File` 媒体源识别该集。
 - **持续运维**：JSON 文件保存设置和队列，支持 systemd 管理、日志查看、版本检查与校验后升级。
@@ -36,7 +36,7 @@ mkdir moviehub-quickstart
 cd moviehub-quickstart
 set -euo pipefail
 
-version=v0.4.3
+version=v0.4.4
 case "$(uname -m)" in
   x86_64) arch=amd64 ;;
   aarch64|arm64) arch=arm64 ;;
@@ -122,7 +122,7 @@ go vet ./...
 构建 Linux `amd64`、`arm64` 发布程序及校验和：
 
 ```bash
-MOVIEHUB_VERSION=v0.4.3 ./scripts/build-linux.sh
+MOVIEHUB_VERSION=v0.4.4 ./scripts/build-linux.sh
 ```
 
 更多兼容范围、故障排查和发布验收步骤见 [部署与运维文档](docs/linux-deployment.md)、[服务管理说明](docs/service-management.md) 和 [发版流程](docs/release.md)。

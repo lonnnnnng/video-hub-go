@@ -112,6 +112,16 @@ h1, h2, h3 { line-height: 1.3; }
 .task p, .follow-row p { margin: 2px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 /* long: 筛选固定在工作区顶端；任务按三列排布，剧集与状态在上、传输信息与操作在下，减少横向留白。 */
 .jobs-toolbar { position: sticky; top: 0; z-index: 2; min-height: 56px; padding: 10px 0; margin: -10px 0 0; border-bottom: 1px solid var(--line); background: #f2f5f4; }
+.jobs-toolbar .section-head { flex-wrap: wrap; margin-bottom: 8px; }
+.job-batch-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.job-select-all { min-height: 36px; }
+#jobSelectionCount { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+#clearJobSelection { padding: 6px 8px; font-size: 12px; }
+.job-batch-actions { margin-left: auto; }
+.job-batch-result { margin: 12px 0 4px; color: var(--ink); font-size: 12px; overflow-wrap: anywhere; }
+.job-batch-result p { margin: 0; }
+.job-batch-result ul { max-height: 180px; overflow: auto; margin: 6px 0 0; padding-left: 20px; color: var(--bad); }
+.job-batch-toolbar ::selection, .delete-job-targets ::selection { color: #fff; background: var(--accent); }
 .jobs-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
 #jobSummary { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .job-filters { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -120,6 +130,10 @@ h1, h2, h3 { line-height: 1.3; }
 .job-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 8px; }
 .task { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; align-items: center; gap: 8px 12px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .task-main { grid-row: 1; grid-column: 1; }
+.task-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.task-heading h3 { min-width: 0; }
+.job-choice { display: grid; place-items: center; flex: none; width: 28px; min-height: 28px; margin: -5px -4px -5px -6px; cursor: pointer; }
+.task-selected { border-color: var(--accent); background: #edf5f4; }
 .task h3 { margin: 0; font-size: 13px; }
 .task .task-meta { margin: 3px 0 0; font-size: 11px; }
 .task-metrics { grid-row: 2; grid-column: 1; min-width: 0; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -221,6 +235,8 @@ dialog::backdrop { background: #132a31a8; }
 .delete-job-dialog p { color: var(--muted); font-size: 13px; }
 .delete-files-choice { margin: 10px 0 0; color: var(--bad); }
 .delete-job-dialog footer { margin-top: 22px; }
+.delete-job-targets { max-height: 180px; margin: 12px 0; padding-left: 22px; overflow: auto; overflow-wrap: anywhere; font-size: 13px; line-height: 1.8; scrollbar-width: thin; scrollbar-color: #9db3b5 #f2f5f4; }
+#deleteJobError { white-space: pre-line; }
 
 @media (max-width: 1750px) { .posters { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 @media (max-width: 1450px) { .posters { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
@@ -265,7 +281,10 @@ dialog::backdrop { background: #132a31a8; }
   .follow-main { flex-basis: 100%; }
   .jobs-toolbar { align-items: center; gap: 8px; padding: 10px 0; }
   .job-filters { width: 100%; }
-  .job-filters input { flex: 1; min-width: 0; width: 0; }
+  .job-filters { flex-wrap: wrap; }
+  .job-filters #cleanupTemporary { flex: none; order: 1; }
+  .job-batch-actions { justify-content: flex-start; width: 100%; margin-left: 0; }
+  .job-filters input { flex: 1; min-width: 120px; width: 0; }
   .job-filters .inline-field { flex: none; }
   .job-list { grid-template-columns: minmax(0, 1fr); }
   .task { gap: 6px 12px; padding: 10px; }
@@ -290,4 +309,4 @@ dialog::backdrop { background: #132a31a8; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; } }
 
-@media (pointer: coarse) { .version-actions button, .task-actions button, .source-actions button { min-height: 44px; min-width: 44px; } }
+@media (pointer: coarse) { .version-actions button, .task-actions button, .source-actions button, .job-batch-toolbar button, .job-choice, .job-select-all { min-height: 44px; min-width: 44px; } }

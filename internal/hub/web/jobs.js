@@ -1,7 +1,8 @@
 'use strict';
 
-let deletingJob;
-let deletionPending=false;
+let deletingJobs=[],batchDeletion=false;
+let deletionPending=false,batchPending=false;
+const selectedJobIDs=new Set();
 const localVideo=$('localVideo'),localDialog=$('localPlayerDialog'),deleteDialog=$('deleteJobDialog');
 
 function stopLocalPlayback() {
@@ -18,13 +19,66 @@ function playDownloaded(job) {
  localVideo.play().catch(error=>{if(error.name!=='AbortError'&&localDialog.open&&!localVideo.error)$('localPlayerStatus').textContent='请点击播放器中的播放按钮。';});
 }
 function openDeleteJob(job) {
- if(deletionPending)return;
- deletingJob=job;
- $('deleteJobTitle').textContent='删除 '+job.title+' / '+job.episode.name;
+ openDeleteJobs([job],false);
+}
+function renderDeleteTargets() {
+ $('deleteJobTitle').textContent=batchDeletion?'删除 '+deletingJobs.length+' 项任务':'删除 '+deletingJobs[0].title+' / '+deletingJobs[0].episode.name;
+ $('deleteJobTargets').hidden=!batchDeletion;
+ $('deleteJobTargets').replaceChildren(...deletingJobs.map(job=>el('li',job.title+' / '+job.episode.name)));
+}
+function openDeleteJobs(jobs,batch) {
+ if(deletionPending||batchPending||!jobs.length)return;
+ // long: 确认框固定本次任务清单，后台刷新和新增任务不会扩大删除范围。
+ deletingJobs=[...jobs];batchDeletion=batch;
+ renderDeleteTargets();
  $('deleteFiles').checked=false;
  $('deleteJobError').hidden=true;
  $('confirmDeleteJob').disabled=false;
  deleteDialog.showModal();
+}
+function filteredJobs() {
+ const filter=$('jobFilter').value,query=$('jobSearch').value.trim().toLocaleLowerCase();
+ return [...snapshot.state.jobs].reverse().filter(job=>(!filter||(filter==='active'?['queued','downloading'].includes(job.status):job.status===filter))&&(!query||(job.title+' '+job.episode.name).toLocaleLowerCase().includes(query)));
+}
+function selectedJobs(action) {
+ return snapshot?snapshot.state.jobs.filter(job=>selectedJobIDs.has(job.id)&&(!action||(action==='pause'?['queued','downloading']:['paused','failed','canceled']).includes(job.status))):[];
+}
+function updateJobSelection() {
+ const jobs=snapshot?filteredJobs():[],selected=selectedJobs(),visibleSelected=jobs.filter(job=>selectedJobIDs.has(job.id)).length;
+ const busy=deletionPending||batchPending;
+ $('jobSearch').disabled=busy;$('jobFilter').disabled=busy;$('cleanupTemporary').disabled=busy;
+ const all=$('selectAllJobs');all.checked=jobs.length>0&&visibleSelected===jobs.length;all.indeterminate=visibleSelected>0&&visibleSelected<jobs.length;all.disabled=busy||!jobs.length;
+ const hidden=selected.length-visibleSelected;
+ $('jobSelectionCount').textContent=busy?'正在处理任务…':'已选 '+selected.length+' 项'+(hidden?'（'+hidden+' 项不在当前筛选）':'');
+ $('clearJobSelection').disabled=busy||!selected.length;
+ for(const [id,action,label] of [['batchPauseJobs','pause','批量暂停'],['batchResumeJobs','resume','继续 / 重试']]){
+  const count=selectedJobs(action).length;
+  $(id).textContent=label+(count?' ('+count+')':'');$(id).disabled=busy||!count;
+ }
+ $('batchDeleteJobs').disabled=busy||!selected.length;
+ for(const input of document.querySelectorAll('.job-choice input')){
+  input.checked=selectedJobIDs.has(input.value);input.disabled=busy;input.closest('.task').classList.toggle('task-selected',input.checked);
+ }
+}
+function showBatchResult(results,jobs,label) {
+ const failed=results.filter(result=>!result.success),root=$('jobBatchResult');root.replaceChildren();root.hidden=false;
+ root.append(el('p',label+'：成功 '+(results.length-failed.length)+' 项'+(failed.length?'，失败 '+failed.length+' 项。失败任务保留选择，可重试。':'。')));
+ if(failed.length){
+  const names=new Map(jobs.map(job=>[job.id,job.title+' / '+job.episode.name])),list=el('ul');
+  for(const result of failed)list.append(el('li',(names.get(result.id)||result.id)+'：'+result.error));
+  root.append(list);
+ }
+}
+async function runBatchAction(action) {
+ if(batchPending||deletionPending)return;
+ const jobs=selectedJobs(action);if(!jobs.length)return;
+ batchPending=true;renderJobs();
+ try{
+  const {results}=await api('jobs/batch',{ids:jobs.map(job=>job.id),action});
+  for(const result of results)if(result.success)selectedJobIDs.delete(result.id);
+  showBatchResult(results,jobs,action==='pause'?'批量暂停':'继续 / 重试');await refresh();
+ }catch(error){notice(error.message,true);}
+ finally{batchPending=false;renderJobs();}
 }
 function formatBytes(bytes) {
  if(!Number.isFinite(bytes)||bytes<=0)return '大小未知';
@@ -34,16 +88,22 @@ function formatBytes(bytes) {
 }
 function renderJobs() {
  if(!snapshot)return;
+ const focusedChoice=document.activeElement?.matches('.job-choice input')?document.activeElement.value:undefined;
  const root=$('jobList');root.replaceChildren();
- const filter=$('jobFilter').value,query=$('jobSearch').value.trim().toLocaleLowerCase();
  const all=snapshot.state.jobs;
- const jobs=[...all].reverse().filter(job=>(!filter||(filter==='active'?['queued','downloading'].includes(job.status):job.status===filter))&&(!query||(job.title+' '+job.episode.name).toLocaleLowerCase().includes(query)));
+ const existing=new Set(all.map(job=>job.id));
+ // long: 选择按任务 ID 保存，轮询重绘后恢复；已不存在的任务及时移除，新增任务不会自动选中。
+ for(const id of selectedJobIDs)if(!existing.has(id))selectedJobIDs.delete(id);
+ const jobs=filteredJobs();
  $('jobSummary').textContent=jobs.length+' / '+all.length+' 项';
- if(!jobs.length){empty(root,all.length?'没有符合筛选条件的任务':'还没有任务，搜索剧集后选择分集下载');return;}
+ if(!jobs.length){empty(root,all.length?'没有符合筛选条件的任务':'还没有任务，搜索剧集后选择分集下载');updateJobSelection();return;}
  for(const job of jobs){
   const row=el('article',undefined,'task'),main=el('div',undefined,'task-main');
   const title=el('h3',job.title);title.title=job.title;
-  main.append(title,el('p',job.episode.name+' · 第 '+job.season+' 季'+(job.attempts>1?' · 尝试 '+job.attempts+' 次':''),'task-meta'));
+  const choice=el('label',undefined,'job-choice'),checkbox=el('input');checkbox.type='checkbox';checkbox.value=job.id;checkbox.setAttribute('aria-label','选择 '+job.title+' / '+job.episode.name);
+  checkbox.onchange=()=>{if(checkbox.checked)selectedJobIDs.add(job.id);else selectedJobIDs.delete(job.id);updateJobSelection();};choice.append(checkbox);
+  const heading=el('div',undefined,'task-heading');heading.append(choice,title);
+  main.append(heading,el('p',job.episode.name+' · 第 '+job.season+' 季'+(job.attempts>1?' · 尝试 '+job.attempts+' 次':''),'task-meta'));
   const metrics=el('div',undefined,'task-metrics');
   if(job.status==='downloading'){
    const merging=job.progress>=0.95&&!job.speed;
@@ -71,15 +131,28 @@ function renderJobs() {
   if(['queued','paused','failed','canceled'].includes(job.status))actions.append(button(job.status==='queued'?'调整线路/季号':'换线路重试',()=>openConfigureJob(job)));
   if(!['completed','canceled'].includes(job.status))action('取消','cancel');
   const remove=iconButton('trash','删除 '+job.title+' / '+job.episode.name,()=>openDeleteJob(job));remove.classList.add('danger-button');actions.append(remove);
+  for(const control of actions.children)control.disabled=deletionPending||batchPending;
   row.append(main,metrics,el('span',job.status==='queued'&&job.waitingForSpace?'等待磁盘空间':labels[job.status]||job.status,'badge '+(job.status==='completed'?'good':job.status==='failed'?'bad':'')),actions);
   if(job.error){const error=el('p',job.error,'error-text task-error');row.append(error);}
   if(job.cleanupError)row.append(el('p','临时清理：'+job.cleanupError,'error-text task-error'));
   if(snapshot.state.settings.embyEnabled&&job.embyMedia?.error)row.append(el('p',job.embyMedia.error,'error-text task-error'));
   root.append(row);
  }
+ updateJobSelection();
+ // long: 自动刷新替换任务行后恢复正在使用的复选框焦点，让键盘连续选择不会被轮询打断。
+ if(focusedChoice)Array.from(root.querySelectorAll('.job-choice input')).find(input=>input.value===focusedChoice)?.focus({preventScroll:true});
 }
-$('jobFilter').onchange=renderJobs;
-$('jobSearch').oninput=renderJobs;
+function changeJobFilter() {
+ // long: 手动切换筛选清空选择，避免用户批量删除上一筛选中已隐藏的任务。
+ selectedJobIDs.clear();$('jobBatchResult').hidden=true;renderJobs();
+}
+$('jobFilter').onchange=changeJobFilter;
+$('jobSearch').oninput=changeJobFilter;
+$('selectAllJobs').onchange=()=>{for(const job of filteredJobs()){if($('selectAllJobs').checked)selectedJobIDs.add(job.id);else selectedJobIDs.delete(job.id);}updateJobSelection();};
+$('clearJobSelection').onclick=()=>{selectedJobIDs.clear();updateJobSelection();};
+$('batchPauseJobs').onclick=()=>runBatchAction('pause');
+$('batchResumeJobs').onclick=()=>runBatchAction('resume');
+$('batchDeleteJobs').onclick=()=>openDeleteJobs(selectedJobs(),true);
 let configuringJob,configureVideo,configureSequence=0,configurationPending=false;
 function renderConfigureEpisodes(){
  const line=configureVideo.lines.find(line=>line.id===$('configureLine').value);
@@ -130,14 +203,22 @@ localVideo.addEventListener('ended',()=>{$('localPlayerStatus').textContent='播
 $('cancelDeleteJob').onclick=()=>deleteDialog.close();
 deleteDialog.addEventListener('cancel',event=>{if(deletionPending)event.preventDefault();});
 $('confirmDeleteJob').onclick=()=>act($('confirmDeleteJob'),async()=>{
- if(!deletingJob)return;
- const job=deletingJob,removeFiles=$('deleteFiles').checked;
+ if(!deletingJobs.length||deletionPending)return;
+ const jobs=[...deletingJobs],removeFiles=$('deleteFiles').checked;
  deletionPending=true;$('cancelDeleteJob').disabled=true;$('deleteFiles').disabled=true;
- $('deleteJobError').hidden=true;
- if(localDialog.dataset.jobId===job.id)localDialog.close();
+ $('deleteJobError').hidden=true;$('confirmDeleteJob').textContent='正在删除…';renderJobs();
+ if(jobs.some(job=>localDialog.dataset.jobId===job.id))localDialog.close();
  try {
-  await api('jobs/'+encodeURIComponent(job.id)+'/'+(removeFiles?'remove-files':'remove'),{});
-  deleteDialog.close();await refresh();notice(removeFiles?'任务及文件已删除':'任务已删除，文件已保留');
+  const action=removeFiles?'remove-files':'remove';
+  const {results}=batchDeletion?await api('jobs/batch',{ids:jobs.map(job=>job.id),action}):await api('jobs/'+encodeURIComponent(jobs[0].id)+'/'+action,{}).then(()=>({results:[{id:jobs[0].id,success:true}]}));
+  for(const result of results)if(result.success)selectedJobIDs.delete(result.id);
+  const failed=results.filter(result=>!result.success),succeeded=results.length-failed.length;
+  if(batchDeletion)showBatchResult(results,jobs,removeFiles?'删除任务及文件':'删除任务（保留文件）');
+  if(failed.length){
+   const errors=new Map(failed.map(result=>[result.id,result.error]));deletingJobs=jobs.filter(job=>errors.has(job.id));renderDeleteTargets();
+   $('deleteJobError').textContent='已删除 '+succeeded+' 项，失败 '+failed.length+' 项。可重试剩余任务。\n'+deletingJobs.map(job=>job.title+' / '+job.episode.name+'：'+errors.get(job.id)).join('\n');$('deleteJobError').hidden=false;
+  }else{deleteDialog.close();notice('已删除 '+succeeded+' 项任务，'+(removeFiles?'文件已清理':'文件已保留'));}
+  await refresh();
  }catch(error){$('deleteJobError').textContent=error.message;$('deleteJobError').hidden=false;await refresh();}
- finally{deletionPending=false;$('cancelDeleteJob').disabled=false;$('deleteFiles').disabled=false;}
+ finally{deletionPending=false;$('cancelDeleteJob').disabled=false;$('deleteFiles').disabled=false;$('confirmDeleteJob').textContent='确认删除';renderJobs();}
 });
